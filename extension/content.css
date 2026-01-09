@@ -1,0 +1,155 @@
+/**
+ * Content Script Styles for JB Solicitors CRM Automation
+ */
+
+/* Highlight elements being automated */
+.jb-automation-highlight {
+  outline: 3px solid #4285F4 !important;
+  outline-offset: 2px;
+  background-color: rgba(66, 133, 244, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Processing indicator */
+.jb-automation-processing {
+  position: relative;
+}
+
+.jb-automation-processing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(66, 133, 244, 0.1);
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* Success indicator */
+.jb-automation-success {
+  outline: 3px solid #34A853 !important;
+  outline-offset: 2px;
+  animation: pulse-green 0.5s ease;
+}
+
+/* Error indicator */
+.jb-automation-error {
+  outline: 3px solid #EA4335 !important;
+  outline-offset: 2px;
+  animation: pulse-red 0.5s ease;
+}
+
+/* Floating status indicator */
+.jb-automation-status {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 99999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-width: 280px;
+}
+
+.jb-automation-status-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.jb-automation-status-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jb-automation-status-icon.active {
+  background: #4285F4;
+  color: white;
+  animation: spin 1s linear infinite;
+}
+
+.jb-automation-status-icon.success {
+  background: #34A853;
+  color: white;
+}
+
+.jb-automation-status-icon.error {
+  background: #EA4335;
+  color: white;
+}
+
+.jb-automation-status-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.jb-automation-status-content {
+  font-size: 13px;
+  color: #5f6368;
+  line-height: 1.5;
+}
+
+.jb-automation-status-progress {
+  margin-top: 12px;
+  height: 4px;
+  background: #e8eaed;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.jb-automation-status-progress-bar {
+  height: 100%;
+  background: #4285F4;
+  transition: width 0.3s ease;
+}
+
+/* Animations */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(52, 168, 83, 0); }
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(234, 67, 53, 0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Tooltip for field info */
+.jb-automation-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #323232;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  margin-bottom: 8px;
+  z-index: 9999;
+}
+
+.jb-automation-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #323232;
+}

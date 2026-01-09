@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - JB Solicitors CRM Automation</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <h1>Settings</h1>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="general">General</button>
+      <button class="tab" data-tab="api">API Configuration</button>
+      <button class="tab" data-tab="automation">Automation</button>
+      <button class="tab" data-tab="advanced">Advanced</button>
+    </nav>
+
+    <main>
+      <!-- General Tab -->
+      <section class="tab-content active" id="general">
+        <h2>General Settings</h2>
+
+        <div class="form-group">
+          <label for="defaultAssignedTo">Default Assigned To</label>
+          <input type="text" id="defaultAssignedTo" placeholder="Audrey">
+          <small>The user to assign all new leads to</small>
+        </div>
+
+        <div class="form-group">
+          <label for="defaultAssignedBy">Default Assigned By</label>
+          <input type="text" id="defaultAssignedBy" placeholder="Audrey">
+          <small>The user who creates the leads</small>
+        </div>
+
+        <div class="form-group">
+          <label for="defaultSource">Default Source</label>
+          <input type="text" id="defaultSource" placeholder="Other">
+          <small>The default source for all leads</small>
+        </div>
+
+        <div class="form-group">
+          <label for="defaultAreaOfLaw">Default Area of Law</label>
+          <input type="text" id="defaultAreaOfLaw" placeholder="Advice">
+          <small>The default area of law for all leads</small>
+        </div>
+      </section>
+
+      <!-- API Configuration Tab -->
+      <section class="tab-content" id="api">
+        <h2>API Configuration</h2>
+
+        <div class="form-group">
+          <label for="apiUrl">API URL *</label>
+          <input type="url" id="apiUrl" placeholder="https://script.google.com/macros/s/..." required>
+          <small>The web app URL from your Apps Script deployment</small>
+        </div>
+
+        <div class="form-group">
+          <label for="apiKey">API Key (Optional)</label>
+          <input type="text" id="apiKey" placeholder="Your API key">
+          <small>Optional API key for authentication</small>
+        </div>
+
+        <div class="info-box">
+          <h4>How to get the API URL:</h4>
+          <ol>
+            <li>Open your Apps Script project</li>
+            <li>Click "Deploy" → "New deployment"</li>
+            <li>Select type: "Web app"</li>
+            <li>Execute as: "Me"</li>
+            <li>Who has access: "Anyone"</li>
+            <li>Click "Deploy" and copy the URL</li>
+          </ol>
+        </div>
+
+        <button id="testConnectionBtn" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          Test Connection
+        </button>
+
+        <div id="connectionResult" class="connection-result"></div>
+      </section>
+
+      <!-- Automation Tab -->
+      <section class="tab-content" id="automation">
+        <h2>Automation Settings</h2>
+
+        <div class="form-group">
+          <label for="batchDelay">Delay Between Leads</label>
+          <div class="input-group">
+            <input type="number" id="batchDelay" min="500" max="30000" step="500" value="2000">
+            <span>milliseconds</span>
+          </div>
+          <small>How long to wait between processing each lead (500ms - 30s)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="batchSize">Batch Size</label>
+          <input type="number" id="batchSize" min="1" max="100" value="10">
+          <small>Number of leads to process in one batch</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoStart">
+            <span>Auto-start automation</span>
+          </label>
+          <small>Automatically start processing when new leads are detected</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoSave">
+            <span>Auto-save forms</span>
+          </label>
+          <small>Automatically save forms after filling (recommended)</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="markProcessed">
+            <span>Mark leads as processed</span>
+          </label>
+          <small>Automatically mark leads as processed in the sheet</small>
+        </div>
+      </section>
+
+      <!-- Advanced Tab -->
+      <section class="tab-content" id="advanced">
+        <h2>Advanced Settings</h2>
+
+        <div class="form-group">
+          <label for="retryAttempts">Retry Attempts</label>
+          <input type="number" id="retryAttempts" min="0" max="10" value="3">
+          <small>Number of times to retry failed operations</small>
+        </div>
+
+        <div class="form-group">
+          <label for="timeout">Request Timeout</label>
+          <div class="input-group">
+            <input type="number" id="timeout" min="5000" max="60000" step="1000" value="30000">
+            <span>milliseconds</span>
+          </div>
+          <small>Timeout for API requests (5s - 60s)</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="debugMode">
+            <span>Debug Mode</span>
+          </label>
+          <small>Enable detailed logging for troubleshooting</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="highlightFields">
+            <span>Highlight Fields</span>
+          </label>
+          <small>Highlight form fields as they are being filled</small>
+        </div>
+
+        <div class="danger-zone">
+          <h3>Danger Zone</h3>
+          <button id="clearLogsBtn" class="btn btn-danger">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
+            Clear All Logs
+          </button>
+          <button id="resetSettingsBtn" class="btn btn-danger">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1118 0M3 12l6-6m-6 6l6 6"/>
+            </svg>
+            Reset to Defaults
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="status" id="saveStatus"></div>
+      <button id="saveBtn" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Save Settings
+      </button>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
