@@ -65,6 +65,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+// Handle extension icon click - open side panel
+chrome.action.onClicked.addListener(async (tab) => {
+  // Open the side panel
+  await chrome.sidePanel.open({ windowId: tab.windowId });
+});
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'START_AUTOMATION') {
