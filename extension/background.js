@@ -65,11 +65,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
-// Handle extension icon click - open side panel
-chrome.action.onClicked.addListener(async (tab) => {
-  // Open the side panel
-  await chrome.sidePanel.open({ windowId: tab.windowId });
-});
+// Note: Side panel opens automatically when extension icon is clicked
+// No need for chrome.action.onClicked when using side_panel in manifest
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
