@@ -17,7 +17,6 @@ let failedLeads = [];
 // Configuration
 let config = {
   apiUrl: '',
-  apiKey: '',
   batchDelay: 2000, // Delay between leads in ms
   autoStart: false,
   retryAttempts: 3
@@ -30,7 +29,6 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set default configuration
   chrome.storage.sync.get({
     apiUrl: '',
-    apiKey: '',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3
@@ -52,7 +50,6 @@ chrome.runtime.onStartup.addListener(() => {
   // Load configuration
   chrome.storage.sync.get({
     apiUrl: '',
-    apiKey: '',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3

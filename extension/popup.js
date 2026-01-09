@@ -67,7 +67,6 @@ function handleMessage(message, sender, sendResponse) {
 async function checkConfig() {
   const config = await chrome.storage.sync.get({
     apiUrl: '',
-    apiKey: '',
     batchDelay: 2000,
     autoStart: false
   });

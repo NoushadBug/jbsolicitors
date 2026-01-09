@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JB Solicitors CRM Automation</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div class="sidebar-container">
+    <!-- Header -->
+    <header class="sidebar-header">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <span>JB Solicitors</span>
+      </div>
+      <button id="refreshBtn" class="icon-btn" title="Refresh">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Connection Status -->
+    <div class="status-bar">
+      <div class="status-item" id="connectionStatus">
+        <div class="status-indicator connecting"></div>
+        <span class="status-text" id="connectionText">Checking...</span>
+      </div>
+      <div class="status-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+        </svg>
+        <span id="pendingCount">-</span>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="sidebar-content">
+      <!-- Actions -->
+      <section class="actions-section">
+        <button id="fetchLeadsBtn" class="btn btn-primary btn-block" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          Fetch Leads
+        </button>
+        <button id="startAutomationBtn" class="btn btn-success btn-block" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Start Automation
+        </button>
+      </section>
+
+      <!-- Progress -->
+      <section class="progress-section" id="progressSection" style="display: none;">
+        <div class="progress-header">
+          <span class="progress-label">Processing</span>
+          <span class="progress-count" id="progressCount">0 / 0</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="current-lead" id="currentLead">Ready to start...</div>
+      </section>
+
+      <!-- Current Lead Preview -->
+      <section class="lead-preview" id="leadPreview" style="display: none;">
+        <h3>Current Lead</h3>
+        <div class="lead-details" id="leadDetails">
+          <div class="detail-row">
+            <span class="label">Name:</span>
+            <span class="value" id="leadName">-</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Email:</span>
+            <span class="value" id="leadEmail">-</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Company:</span>
+            <span class="value" id="leadCompany">-</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Activity Log -->
+      <section class="log-section">
+        <div class="log-header">
+          <span>Activity Log</span>
+          <button id="clearLogBtn" class="icon-btn" title="Clear log">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
+          </button>
+        </div>
+        <div class="log-content" id="logContent">
+          <div class="log-entry info">
+            <span class="log-message">Extension initialized</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="sidebar-footer">
+      <button id="optionsBtn" class="btn btn-secondary btn-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
+        </svg>
+        Settings
+      </button>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

@@ -12,7 +12,6 @@ const DEFAULT_CONFIG = {
 
   // API
   apiUrl: '',
-  apiKey: '',
 
   // Automation
   batchDelay: 2000,
@@ -58,7 +57,6 @@ function cacheElements() {
 
   // API
   elements.apiUrl = document.getElementById('apiUrl');
-  elements.apiKey = document.getElementById('apiKey');
   elements.testConnectionBtn = document.getElementById('testConnectionBtn');
   elements.connectionResult = document.getElementById('connectionResult');
 
@@ -133,7 +131,6 @@ async function loadSettings() {
   elements.defaultAreaOfLaw.value = config.defaultAreaOfLaw || DEFAULT_CONFIG.defaultAreaOfLaw;
 
   elements.apiUrl.value = config.apiUrl || '';
-  elements.apiKey.value = config.apiKey || '';
 
   elements.batchDelay.value = config.batchDelay || DEFAULT_CONFIG.batchDelay;
   elements.batchSize.value = config.batchSize || DEFAULT_CONFIG.batchSize;
@@ -157,7 +154,6 @@ function getFormValues() {
     defaultSource: elements.defaultSource.value,
     defaultAreaOfLaw: elements.defaultAreaOfLaw.value,
     apiUrl: elements.apiUrl.value,
-    apiKey: elements.apiKey.value,
     batchDelay: elements.batchDelay.value,
     batchSize: elements.batchSize.value,
     autoStart: elements.autoStart.checked,
