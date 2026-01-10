@@ -22,9 +22,16 @@ let config = {
   retryAttempts: 3
 };
 
+// Enable side panel toggle on extension icon click
+// This must be called at the top level to ensure it's set immediately
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+
 // Initialize on install/startup
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[JB Solicitors] Extension installed');
+
+  // Enable side panel toggle when clicking the extension icon
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
   chrome.storage.sync.get({
     apiUrl: '',
@@ -44,6 +51,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   console.log('[JB Solicitors] Extension started');
+
+  // Ensure side panel toggle is enabled on startup
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
   chrome.storage.sync.get({
     apiUrl: '',
@@ -118,22 +128,32 @@ async function startAutomation(leads) {
 
   log('info', `Starting automation for ${leads.length} leads`);
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Look for existing CRM tab
+  const tabs = await chrome.tabs.query({ url: `${CRM_URL}/*` });
 
-  if (!tab) {
-    throw new Error('No active tab found. Please open the CRM page.');
-  }
+  if (tabs.length > 0) {
+    // Found existing CRM tab, navigate to enquiriesSummary
+    const crmTab = tabs[0];
+    log('info', `Found existing CRM tab, navigating to: ${CRM_URL}${CRM_REQUIRED_PATH}`);
 
-  if (!tab.url || !tab.url.startsWith(CRM_URL)) {
-    log('warning', `Opening CRM page: ${CRM_URL}${CRM_REQUIRED_PATH}`);
-    await chrome.tabs.create({ url: `${CRM_URL}${CRM_REQUIRED_PATH}`, active: true });
+    await chrome.tabs.update(crmTab.id, {
+      url: `${CRM_URL}${CRM_REQUIRED_PATH}`,
+      active: true
+    });
+
     await delay(2000);
-
-    const [newTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    return processLeadsInTab(newTab.id, leads);
+    return processLeadsInTab(crmTab.id, leads);
   }
 
-  return processLeadsInTab(tab.id, leads);
+  // No CRM tab found, create new one
+  log('info', `No CRM tab found, opening: ${CRM_URL}${CRM_REQUIRED_PATH}`);
+  const newTab = await chrome.tabs.create({
+    url: `${CRM_URL}${CRM_REQUIRED_PATH}`,
+    active: true
+  });
+
+  await delay(2000);
+  return processLeadsInTab(newTab.id, leads);
 }
 
 async function processLeadsInTab(tabId, leads) {

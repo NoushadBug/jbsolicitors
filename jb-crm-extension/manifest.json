@@ -5,9 +5,10 @@
   "description": "Automated lead generation and CRM data entry for JB Solicitors",
   "permissions": [
     "storage",
-    "activeTab",
+    "tabs",
     "scripting",
-    "sidePanel"
+    "sidePanel",
+    "notifications"
   ],
   "host_permissions": [
     "https://script.google.com/*",
@@ -33,7 +34,6 @@
   "side_panel": {
     "default_path": "sidebar.html"
   },
-  "options_page": "options.html",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

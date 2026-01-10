@@ -245,4 +245,11 @@ To automate the lead generation, the extension must follow these specific steps 
 Operational Requirements
 • System State: For the automation to run, the browser must remain open, and the computer must stay awake (not in sleep or power-off mode).
 • Frequency: The extension is intended to run as a daily process rather than a one-time solution.
-To visualize this, think of the extension as a digital clerk: it first organizes its desk by filtering for Audrey’s files, then opens a new folder for every row in the master spreadsheet, meticulously filling out the same specific forms before filing them away and starting the next one.
+To visualize this, think of the extension as a digital clerk: it first organizes its desk by filtering for Audrey's files, then opens a new folder for every row in the master spreadsheet, meticulously filling out the same specific forms before filing them away and starting the next one.
+
+### Lessons Learned
+
+- **Chrome Extension Tab Management**: When automating with Chrome extensions, use `chrome.tabs.query({ url: "pattern" })` to find existing tabs matching the target URL before creating new ones. This prevents duplicate tabs and improves UX.
+- **Manifest V3 Permissions**: To query all tabs (not just the active one), use the `"tabs"` permission instead of `"activeTab"`.
+- **Sidebar vs Popup**: For long-running automations, Chrome's side panel API (`sidePanel`) is superior to popups because the sidebar remains open and visible while the automation runs in the main tab.
+- **Extension UI Simplification**: A minimal sidebar UI with just essential controls (fetch, start, progress, log) is more effective than complex multi-panel designs. Use CSS variables for consistent theming.

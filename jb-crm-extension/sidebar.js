@@ -1,73 +1,140 @@
 /**
  * Sidebar Script for JB Solicitors CRM Automation
- * Side Panel version - stays open while working on the CRM
  */
+
+// Default configuration
+const DEFAULT_CONFIG = {
+  // General
+  defaultAssignedTo: 'Audrey',
+  defaultAssignedBy: 'Audrey',
+  defaultSource: 'Other',
+  defaultAreaOfLaw: 'Advice',
+
+  // API
+  apiUrl: '',
+
+  // Automation
+  batchDelay: 2000,
+  batchSize: 10,
+  autoStart: false,
+  autoSave: true,
+  markProcessed: true,
+
+  // Advanced
+  retryAttempts: 3,
+  timeout: 30000,
+  debugMode: false,
+  highlightFields: true
+};
 
 // State
 let currentLeads = [];
-let processedCount = 0;
 let isProcessing = false;
 
 // DOM Elements
 const elements = {
-  connectionStatus: document.getElementById('connectionStatus'),
-  connectionText: document.getElementById('connectionText'),
+  // Main sidebar
+  statusIndicator: document.getElementById('statusIndicator'),
   pendingCount: document.getElementById('pendingCount'),
   fetchLeadsBtn: document.getElementById('fetchLeadsBtn'),
   startAutomationBtn: document.getElementById('startAutomationBtn'),
   progressSection: document.getElementById('progressSection'),
-  progressCount: document.getElementById('progressCount'),
   progressFill: document.getElementById('progressFill'),
+  progressText: document.getElementById('progressText'),
   currentLead: document.getElementById('currentLead'),
-  leadPreview: document.getElementById('leadPreview'),
-  leadName: document.getElementById('leadName'),
-  leadEmail: document.getElementById('leadEmail'),
-  leadCompany: document.getElementById('leadCompany'),
   logContent: document.getElementById('logContent'),
   clearLogBtn: document.getElementById('clearLogBtn'),
-  optionsBtn: document.getElementById('optionsBtn'),
-  refreshBtn: document.getElementById('refreshBtn'),
-  closeBtn: document.getElementById('closeBtn')
+  settingsBtn: document.getElementById('settingsBtn'),
+
+  // Modal
+  settingsModal: document.getElementById('settingsModal'),
+  modalOverlay: document.getElementById('modalOverlay'),
+  closeModalBtn: document.getElementById('closeModalBtn'),
+  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+  saveStatus: document.getElementById('saveStatus'),
+  connectionResult: document.getElementById('connectionResult'),
+
+  // Tabs
+  tabs: document.querySelectorAll('.tab'),
+  tabContents: document.querySelectorAll('.tab-content'),
+
+  // General settings
+  defaultAssignedTo: document.getElementById('defaultAssignedTo'),
+  defaultAssignedBy: document.getElementById('defaultAssignedBy'),
+  defaultSource: document.getElementById('defaultSource'),
+  defaultAreaOfLaw: document.getElementById('defaultAreaOfLaw'),
+
+  // API settings
+  apiUrl: document.getElementById('apiUrl'),
+  testConnectionBtn: document.getElementById('testConnectionBtn'),
+
+  // Automation settings
+  batchDelay: document.getElementById('batchDelay'),
+  batchSize: document.getElementById('batchSize'),
+  autoStart: document.getElementById('autoStart'),
+  autoSave: document.getElementById('autoSave'),
+  markProcessed: document.getElementById('markProcessed'),
+
+  // Advanced settings
+  retryAttempts: document.getElementById('retryAttempts'),
+  timeout: document.getElementById('timeout'),
+  debugMode: document.getElementById('debugMode'),
+  highlightFields: document.getElementById('highlightFields'),
+
+  // Danger zone
+  clearLogsBtn: document.getElementById('clearLogsBtn'),
+  resetSettingsBtn: document.getElementById('resetSettingsBtn')
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
-  // Load saved logs
   loadLogs();
-
-  // Check configuration
+  loadCachedLeads();
   checkConfig();
-
-  // Setup event listeners
   setupEventListeners();
-
-  // Check connection
   checkConnection();
+  loadSettings();
 
-  // Listen for messages from background
   chrome.runtime.onMessage.addListener(handleMessage);
 }
 
 function setupEventListeners() {
+  // Main sidebar
   elements.fetchLeadsBtn.addEventListener('click', fetchLeads);
   elements.startAutomationBtn.addEventListener('click', startAutomation);
   elements.clearLogBtn.addEventListener('click', clearLogs);
-  elements.optionsBtn.addEventListener('click', () => {
-    chrome.runtime.openOptionsPage();
-  });
-  elements.refreshBtn.addEventListener('click', () => {
-    checkConnection();
-    addLog('info', 'Refreshing connection...');
-  });
-  elements.closeBtn.addEventListener('click', closeSidebar);
-}
+  elements.settingsBtn.addEventListener('click', openSettingsModal);
 
-function closeSidebar() {
-  chrome.runtime.sendMessage({ type: 'CLOSE_SIDEBAR' }, (response) => {
-    if (response && response.success) {
-      addLog('info', 'Sidebar closed');
+  // Modal
+  elements.closeModalBtn.addEventListener('click', closeSettingsModal);
+  elements.modalOverlay.addEventListener('click', closeSettingsModal);
+  elements.saveSettingsBtn.addEventListener('click', saveSettings);
+
+  // Tabs
+  elements.tabs.forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  });
+
+  // Test connection
+  elements.testConnectionBtn.addEventListener('click', testConnection);
+
+  // Clear logs (danger zone)
+  elements.clearLogsBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all logs?')) {
+      clearLogs();
+      addLog('info', 'All logs cleared');
+    }
+  });
+
+  // Reset settings
+  elements.resetSettingsBtn.addEventListener('click', resetSettings);
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && elements.settingsModal.classList.contains('open')) {
+      closeSettingsModal();
     }
   });
 }
@@ -83,17 +150,206 @@ function handleMessage(message, sender, sendResponse) {
   return true;
 }
 
-// Configuration
-async function checkConfig() {
-  const config = await chrome.storage.sync.get({
-    apiUrl: '',
-    batchDelay: 2000,
-    autoStart: false
+// ============================================
+// MODAL FUNCTIONS
+// ============================================
+
+function openSettingsModal() {
+  elements.settingsModal.classList.add('open');
+  loadSettings();
+}
+
+function closeSettingsModal() {
+  elements.settingsModal.classList.remove('open');
+}
+
+function switchTab(tabName) {
+  // Update tab buttons
+  elements.tabs.forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === tabName);
   });
 
+  // Update tab content
+  elements.tabContents.forEach(content => {
+    content.classList.toggle('active', content.id === tabName);
+  });
+}
+
+async function loadSettings() {
+  const config = await chrome.storage.sync.get(DEFAULT_CONFIG);
+
+  // Apply to form fields
+  elements.defaultAssignedTo.value = config.defaultAssignedTo || DEFAULT_CONFIG.defaultAssignedTo;
+  elements.defaultAssignedBy.value = config.defaultAssignedBy || DEFAULT_CONFIG.defaultAssignedBy;
+  elements.defaultSource.value = config.defaultSource || DEFAULT_CONFIG.defaultSource;
+  elements.defaultAreaOfLaw.value = config.defaultAreaOfLaw || DEFAULT_CONFIG.defaultAreaOfLaw;
+
+  elements.apiUrl.value = config.apiUrl || '';
+
+  elements.batchDelay.value = config.batchDelay || DEFAULT_CONFIG.batchDelay;
+  elements.batchSize.value = config.batchSize || DEFAULT_CONFIG.batchSize;
+  elements.autoStart.checked = config.autoStart || false;
+  elements.autoSave.checked = config.autoSave !== false;
+  elements.markProcessed.checked = config.markProcessed !== false;
+
+  elements.retryAttempts.value = config.retryAttempts || DEFAULT_CONFIG.retryAttempts;
+  elements.timeout.value = config.timeout || DEFAULT_CONFIG.timeout;
+  elements.debugMode.checked = config.debugMode || false;
+  elements.highlightFields.checked = config.highlightFields !== false;
+}
+
+function getSettingsFormValues() {
+  return {
+    defaultAssignedTo: elements.defaultAssignedTo.value,
+    defaultAssignedBy: elements.defaultAssignedBy.value,
+    defaultSource: elements.defaultSource.value,
+    defaultAreaOfLaw: elements.defaultAreaOfLaw.value,
+    apiUrl: elements.apiUrl.value,
+    batchDelay: elements.batchDelay.value,
+    batchSize: elements.batchSize.value,
+    autoStart: elements.autoStart.checked,
+    autoSave: elements.autoSave.checked,
+    markProcessed: elements.markProcessed.checked,
+    retryAttempts: elements.retryAttempts.value,
+    timeout: elements.timeout.value,
+    debugMode: elements.debugMode.checked,
+    highlightFields: elements.highlightFields.checked
+  };
+}
+
+async function saveSettings() {
+  const config = getSettingsFormValues();
+
+  // Convert numeric values
+  config.batchDelay = parseInt(config.batchDelay);
+  config.batchSize = parseInt(config.batchSize);
+  config.retryAttempts = parseInt(config.retryAttempts);
+  config.timeout = parseInt(config.timeout);
+
+  // Show saving status
+  showSaveStatus('saving');
+
+  try {
+    await chrome.storage.sync.set(config);
+
+    showSaveStatus('saved');
+
+    // Notify background script
+    chrome.runtime.sendMessage({
+      type: 'UPDATE_CONFIG',
+      config: config
+    });
+
+    // Recheck connection with new settings
+    await checkConnection();
+
+    setTimeout(() => {
+      elements.saveStatus.textContent = '';
+      elements.saveStatus.className = 'status';
+    }, 2000);
+  } catch (error) {
+    showSaveStatus('error', error.message);
+  }
+}
+
+function showSaveStatus(status, message) {
+  elements.saveStatus.className = 'status ' + status;
+
+  switch (status) {
+    case 'saving':
+      elements.saveStatus.textContent = 'Saving...';
+      break;
+    case 'saved':
+      elements.saveStatus.textContent = 'Settings saved!';
+      break;
+    case 'error':
+      elements.saveStatus.textContent = 'Error: ' + message;
+      break;
+  }
+}
+
+async function testConnection() {
+  const apiUrl = elements.apiUrl.value.trim();
+
+  if (!apiUrl) {
+    showConnectionResult('error', 'Please enter an API URL first');
+    return;
+  }
+
+  // Validate URL format
+  try {
+    new URL(apiUrl);
+  } catch {
+    showConnectionResult('error', 'Invalid URL format');
+    return;
+  }
+
+  // Disable button and show loading
+  elements.testConnectionBtn.disabled = true;
+  elements.testConnectionBtn.textContent = 'Testing...';
+  elements.connectionResult.style.display = 'none';
+
+  try {
+    const testUrl = apiUrl.includes('?') ? apiUrl + '&action=getSheetData' : apiUrl + '?action=getSheetData';
+
+    const response = await fetch(testUrl);
+
+    if (response.ok) {
+      const data = await response.json();
+
+      if (data.success) {
+        showConnectionResult('success', `Connected! Found ${data.lastRow - 1} leads.`);
+      } else {
+        showConnectionResult('error', 'API Error: ' + (data.error || 'Unknown error'));
+      }
+    } else {
+      showConnectionResult('error', `HTTP ${response.status}: ${response.statusText}`);
+    }
+  } catch (error) {
+    showConnectionResult('error', 'Connection failed: ' + error.message);
+  } finally {
+    elements.testConnectionBtn.disabled = false;
+    elements.testConnectionBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      Test Connection
+    `;
+  }
+}
+
+function showConnectionResult(type, message) {
+  elements.connectionResult.className = 'connection-result ' + type;
+  elements.connectionResult.textContent = message;
+  elements.connectionResult.style.display = 'block';
+}
+
+async function resetSettings() {
+  if (confirm('Are you sure you want to reset all settings to default? This cannot be undone.')) {
+    await chrome.storage.sync.clear();
+
+    // Set default values
+    await chrome.storage.sync.set(DEFAULT_CONFIG);
+
+    // Reload settings
+    await loadSettings();
+
+    addLog('info', 'Settings reset to defaults');
+  }
+}
+
+// ============================================
+// ORIGINAL SIDEBAR FUNCTIONS
+// ============================================
+
+// Configuration
+async function checkConfig() {
+  const config = await chrome.storage.sync.get({ apiUrl: '' });
+
   if (!config.apiUrl) {
-    addLog('warning', 'Please configure the Web App URL in Settings');
-    updateConnectionStatus('error', 'Not Configured');
+    addLog('warning', 'Please configure the API URL in Settings');
+    updateConnectionStatus('error');
     return false;
   }
 
@@ -104,7 +360,7 @@ async function checkConnection() {
   const hasConfig = await checkConfig();
   if (!hasConfig) return;
 
-  updateConnectionStatus('connecting', 'Checking...');
+  updateConnectionStatus('connecting');
 
   try {
     const config = await chrome.storage.sync.get({ apiUrl: '' });
@@ -113,41 +369,52 @@ async function checkConnection() {
     if (response.ok) {
       const data = await response.json();
       if (data.success) {
-        updateConnectionStatus('connected', 'Connected');
-        addLog('success', 'Connected to API successfully');
+        updateConnectionStatus('connected');
         elements.fetchLeadsBtn.disabled = false;
       } else {
-        throw new Error(data.error || 'API returned error');
+        throw new Error(data.error || 'API error');
       }
     } else {
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error) {
-    updateConnectionStatus('error', 'Connection Failed');
-    addLog('error', `Connection failed: ${error.message}`);
+    updateConnectionStatus('error');
+    // Only show error in log if not during initial load
+    if (elements.logContent.children.length > 0) {
+      addLog('error', `Connection failed: ${error.message}`);
+    }
   }
 }
 
-function updateConnectionStatus(status, text) {
-  const indicator = elements.connectionStatus.querySelector('.status-indicator');
-  const statusText = elements.connectionText;
-
-  indicator.className = 'status-indicator ' + status;
-  statusText.textContent = text;
+function updateConnectionStatus(status) {
+  elements.statusIndicator.className = 'status-indicator ' + status;
 }
 
 // Lead Management
+async function loadCachedLeads() {
+  const result = await chrome.storage.local.get({ cachedLeads: null, cachedLeadsTimestamp: 0 });
+  const cachedLeads = result.cachedLeads;
+  const timestamp = result.cachedLeadsTimestamp || 0;
+
+  if (cachedLeads && cachedLeads.length > 0) {
+    currentLeads = cachedLeads;
+    elements.pendingCount.textContent = currentLeads.length;
+    elements.startAutomationBtn.disabled = false;
+
+    const cacheAge = Math.floor((Date.now() - timestamp) / 1000 / 60); // minutes ago
+    addLog('info', `Loaded ${currentLeads.length} cached leads (${cacheAge} min ago)`);
+  }
+}
+
 async function fetchLeads() {
   elements.fetchLeadsBtn.disabled = true;
-  addLog('info', 'Fetching unprocessed leads...');
+  addLog('info', 'Fetching fresh leads...');
 
   try {
     const config = await chrome.storage.sync.get({ apiUrl: '' });
     const response = await fetch(`${config.apiUrl}?action=getUnprocessedLeads`);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json();
 
@@ -155,21 +422,24 @@ async function fetchLeads() {
       currentLeads = data.leads || [];
       elements.pendingCount.textContent = currentLeads.length;
 
-      if (currentLeads.length > 0) {
-        addLog('success', `Found ${currentLeads.length} unprocessed leads`);
-        elements.startAutomationBtn.disabled = false;
+      // Cache the leads in storage
+      await chrome.storage.local.set({
+        cachedLeads: currentLeads,
+        cachedLeadsTimestamp: Date.now()
+      });
 
-        // Show first lead preview
-        showLeadPreview(currentLeads[0]);
+      if (currentLeads.length > 0) {
+        addLog('success', `Found ${currentLeads.length} leads`);
+        elements.startAutomationBtn.disabled = false;
       } else {
-        addLog('info', 'No unprocessed leads found');
-        elements.leadPreview.style.display = 'none';
+        addLog('info', 'No leads found');
+        elements.startAutomationBtn.disabled = true;
       }
     } else {
-      throw new Error(data.error || 'Failed to fetch leads');
+      throw new Error(data.error || 'Failed to fetch');
     }
   } catch (error) {
-    addLog('error', `Failed to fetch leads: ${error.message}`);
+    addLog('error', `Failed: ${error.message}`);
   } finally {
     elements.fetchLeadsBtn.disabled = false;
   }
@@ -178,42 +448,34 @@ async function fetchLeads() {
 async function startAutomation() {
   if (isProcessing) return;
   if (currentLeads.length === 0) {
-    addLog('warning', 'No leads to process. Fetch leads first.');
+    addLog('warning', 'No leads to process');
     return;
   }
 
   isProcessing = true;
-  processedCount = 0;
   elements.progressSection.style.display = 'block';
   elements.startAutomationBtn.disabled = true;
   elements.fetchLeadsBtn.disabled = true;
 
-  addLog('info', `Starting automation for ${currentLeads.length} leads`);
+  addLog('info', `Starting automation (${currentLeads.length} leads)`);
 
-  // Send leads to background script for processing
   chrome.runtime.sendMessage({
     type: 'START_AUTOMATION',
     leads: currentLeads
+  }, (response) => {
+    if (response) {
+      automationComplete(response.success, response.error);
+    }
   });
-}
-
-function showLeadPreview(lead) {
-  if (!lead) return;
-
-  elements.leadPreview.style.display = 'block';
-  elements.leadName.textContent = `${lead.givenName} ${lead.lastName}`;
-  elements.leadEmail.textContent = lead.email || 'N/A';
-  elements.leadCompany.textContent = lead.organizationName || 'N/A';
 }
 
 function updateProgress(current, total, lead) {
   const percentage = Math.round((current / total) * 100);
-  elements.progressCount.textContent = `${current} / ${total}`;
+  elements.progressText.textContent = `${current} / ${total}`;
   elements.progressFill.style.width = `${percentage}%`;
 
   if (lead) {
     elements.currentLead.textContent = `Processing: ${lead.givenName} ${lead.lastName}`;
-    showLeadPreview(lead);
   }
 }
 
@@ -223,45 +485,40 @@ function automationComplete(success, error) {
   elements.fetchLeadsBtn.disabled = false;
 
   if (success) {
-    addLog('success', `Automation complete! Processed ${currentLeads.length} leads`);
+    addLog('success', `Complete! Processed ${currentLeads.length} leads`);
     elements.currentLead.textContent = 'Complete!';
+
+    // Clear cached leads after successful automation
+    chrome.storage.local.remove(['cachedLeads', 'cachedLeadsTimestamp']);
+    currentLeads = [];
+    elements.pendingCount.textContent = '-';
+    elements.startAutomationBtn.disabled = true;
   } else {
-    addLog('error', `Automation failed: ${error}`);
+    addLog('error', `Failed: ${error}`);
     elements.currentLead.textContent = 'Failed';
   }
 
-  // Refresh pending count after a delay
-  setTimeout(() => {
-    checkConnection();
-  }, 2000);
+  setTimeout(() => checkConnection(), 2000);
 }
 
 // Logging
 function addLog(level, message) {
   const logEntry = document.createElement('div');
   logEntry.className = `log-entry ${level}`;
-  logEntry.innerHTML = `<span class="log-message">${escapeHtml(message)}</span>`;
+  logEntry.textContent = message;
 
   elements.logContent.appendChild(logEntry);
   elements.logContent.scrollTop = elements.logContent.scrollHeight;
 
-  // Save to storage
   saveLog(level, message);
 }
 
 function saveLog(level, message) {
   chrome.storage.local.get({ logs: [] }, (result) => {
     const logs = result.logs || [];
-    logs.push({
-      level,
-      message,
-      timestamp: Date.now()
-    });
+    logs.push({ level, message, timestamp: Date.now() });
 
-    // Keep only last 100 logs
-    if (logs.length > 100) {
-      logs.shift();
-    }
+    if (logs.length > 100) logs.shift();
 
     chrome.storage.local.set({ logs });
   });
@@ -273,7 +530,7 @@ function loadLogs() {
     logs.forEach(log => {
       const logEntry = document.createElement('div');
       logEntry.className = `log-entry ${log.level}`;
-      logEntry.innerHTML = `<span class="log-message">${escapeHtml(log.message)}</span>`;
+      logEntry.textContent = log.message;
       elements.logContent.appendChild(logEntry);
     });
 
@@ -284,11 +541,4 @@ function loadLogs() {
 function clearLogs() {
   elements.logContent.innerHTML = '';
   chrome.storage.local.set({ logs: [] });
-  addLog('info', 'Logs cleared');
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
 }

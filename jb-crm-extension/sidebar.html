@@ -10,121 +10,275 @@
   <div class="sidebar-container">
     <!-- Header -->
     <header class="sidebar-header">
-      <div class="logo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-        <span>JB Solicitors</span>
-      </div>
+      <div class="logo">JB Solicitors</div>
       <div class="header-actions">
-        <button id="refreshBtn" class="icon-btn" title="Refresh">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 4v6h-6M1 20v-6h6"/>
-            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-          </svg>
-        </button>
-        <button id="closeBtn" class="icon-btn" title="Close sidebar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+        <div class="status-indicator" id="statusIndicator"></div>
+        <button id="settingsBtn" class="icon-btn" title="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 101 78">
+            <g fill="none" fill-rule="evenodd" stroke="white" stroke-width="4">
+              <g id="bar-top">
+                <circle cx="27.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L20 8.5M45.5 8.5L97 8.5"/>
+              </g>
+              <g id="bar-middle" transform="translate(0 30)">
+                <circle cx="54.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L45.5 8.5M72.5 8.5L97 8.5"/>
+              </g>
+              <g id="bar-bottom" transform="translate(1 61)">
+                <circle cx="41.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L34 8.5M60.5 8.5L96 8.5"/>
+              </g>
+            </g>
           </svg>
         </button>
       </div>
     </header>
 
-    <!-- Connection Status -->
-    <div class="status-bar">
-      <div class="status-item" id="connectionStatus">
-        <div class="status-indicator connecting"></div>
-        <span class="status-text" id="connectionText">Checking...</span>
-      </div>
-      <div class="status-item">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
-          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-        </svg>
-        <span id="pendingCount">-</span>
-      </div>
-    </div>
-
     <!-- Main Content -->
     <main class="sidebar-content">
+      <!-- Pending Count -->
+      <div class="pending-card">
+        <span class="pending-label">Pending Leads</span>
+        <span class="pending-count" id="pendingCount">-</span>
+      </div>
+
       <!-- Actions -->
-      <section class="actions-section">
-        <button id="fetchLeadsBtn" class="btn btn-primary btn-block" disabled>
+      <div class="actions-section">
+        <button id="fetchLeadsBtn" class="btn btn-primary" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           Fetch Leads
         </button>
-        <button id="startAutomationBtn" class="btn btn-success btn-block" disabled>
+        <button id="startAutomationBtn" class="btn btn-success" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
           Start Automation
         </button>
-      </section>
+      </div>
 
       <!-- Progress -->
-      <section class="progress-section" id="progressSection" style="display: none;">
-        <div class="progress-header">
-          <span class="progress-label">Processing</span>
-          <span class="progress-count" id="progressCount">0 / 0</span>
-        </div>
+      <div class="progress-section" id="progressSection" style="display: none;">
         <div class="progress-bar">
           <div class="progress-fill" id="progressFill"></div>
         </div>
+        <div class="progress-text" id="progressText">0 / 0</div>
         <div class="current-lead" id="currentLead">Ready to start...</div>
-      </section>
+      </div>
 
-      <!-- Current Lead Preview -->
-      <section class="lead-preview" id="leadPreview" style="display: none;">
-        <h3>Current Lead</h3>
-        <div class="lead-details" id="leadDetails">
-          <div class="detail-row">
-            <span class="label">Name:</span>
-            <span class="value" id="leadName">-</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Email:</span>
-            <span class="value" id="leadEmail">-</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Company:</span>
-            <span class="value" id="leadCompany">-</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Activity Log -->
-      <section class="log-section">
+      <!-- Log -->
+      <div class="log-section">
         <div class="log-header">
-          <span>Activity Log</span>
-          <button id="clearLogBtn" class="icon-btn" title="Clear log">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-            </svg>
-          </button>
+          <span>Log</span>
+          <button id="clearLogBtn" class="icon-btn" title="Clear log">×</button>
         </div>
-        <div class="log-content" id="logContent">
-          <div class="log-entry info">
-            <span class="log-message">Extension initialized</span>
-          </div>
-        </div>
-      </section>
+        <div class="log-content" id="logContent"></div>
+      </div>
     </main>
+  </div>
 
-    <!-- Footer -->
-    <footer class="sidebar-footer">
-      <button id="optionsBtn" class="btn btn-secondary btn-sm">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-        </svg>
-        Settings
-      </button>
-      <span class="version">v1.0.0</span>
-    </footer>
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 101 78">
+            <g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-width="4">
+              <g id="bar-top">
+                <circle cx="27.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L20 8.5M45.5 8.5L97 8.5"/>
+              </g>
+              <g id="bar-middle" transform="translate(0 30)">
+                <circle cx="54.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L45.5 8.5M72.5 8.5L97 8.5"/>
+              </g>
+              <g id="bar-bottom" transform="translate(1 61)">
+                <circle cx="41.5" cy="8.5" r="6.5"/>
+                <path stroke-linecap="round" d="M.5 8.5L34 8.5M60.5 8.5L96 8.5"/>
+              </g>
+            </g>
+          </svg>
+          Settings
+        </h2>
+        <button id="closeModalBtn" class="icon-btn" title="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <nav class="tabs">
+          <button class="tab active" data-tab="general">General</button>
+          <button class="tab" data-tab="api">API</button>
+          <button class="tab" data-tab="automation">Automation</button>
+          <button class="tab" data-tab="advanced">Advanced</button>
+        </nav>
+
+        <div class="tab-content-container">
+          <!-- General Tab -->
+          <section class="tab-content active" id="general">
+            <h3>General Settings</h3>
+
+            <div class="form-group">
+              <label for="defaultAssignedTo">Default Assigned To</label>
+              <input type="text" id="defaultAssignedTo" placeholder="Audrey">
+              <small>The user to assign all new leads to</small>
+            </div>
+
+            <div class="form-group">
+              <label for="defaultAssignedBy">Default Assigned By</label>
+              <input type="text" id="defaultAssignedBy" placeholder="Audrey">
+              <small>The user who creates the leads</small>
+            </div>
+
+            <div class="form-group">
+              <label for="defaultSource">Default Source</label>
+              <input type="text" id="defaultSource" placeholder="Other">
+              <small>The default source for all leads</small>
+            </div>
+
+            <div class="form-group">
+              <label for="defaultAreaOfLaw">Default Area of Law</label>
+              <input type="text" id="defaultAreaOfLaw" placeholder="Advice">
+              <small>The default area of law for all leads</small>
+            </div>
+          </section>
+
+          <!-- API Tab -->
+          <section class="tab-content" id="api">
+            <h3>API Configuration</h3>
+
+            <div class="form-group">
+              <label for="apiUrl">Web App URL *</label>
+              <input type="url" id="apiUrl" placeholder="https://script.google.com/macros/s/..." required>
+              <small>The web app URL from your Apps Script deployment</small>
+            </div>
+
+            <button id="testConnectionBtn" class="btn btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              Test Connection
+            </button>
+
+            <div id="connectionResult" class="connection-result"></div>
+          </section>
+
+          <!-- Automation Tab -->
+          <section class="tab-content" id="automation">
+            <h3>Automation Settings</h3>
+
+            <div class="form-group">
+              <label for="batchDelay">Delay Between Leads</label>
+              <div class="input-group">
+                <input type="number" id="batchDelay" min="500" max="30000" step="500" value="2000">
+                <span>ms</span>
+              </div>
+              <small>Wait time between processing each lead</small>
+            </div>
+
+            <div class="form-group">
+              <label for="batchSize">Batch Size</label>
+              <input type="number" id="batchSize" min="1" max="100" value="10">
+              <small>Number of leads to process in one batch</small>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoStart">
+                <span>Auto-start automation</span>
+              </label>
+              <small>Automatically start when new leads are detected</small>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoSave">
+                <span>Auto-save forms</span>
+              </label>
+              <small>Automatically save after filling (recommended)</small>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="markProcessed">
+                <span>Mark leads as processed</span>
+              </label>
+              <small>Mark leads as processed in the sheet</small>
+            </div>
+          </section>
+
+          <!-- Advanced Tab -->
+          <section class="tab-content" id="advanced">
+            <h3>Advanced Settings</h3>
+
+            <div class="form-group">
+              <label for="retryAttempts">Retry Attempts</label>
+              <input type="number" id="retryAttempts" min="0" max="10" value="3">
+              <small>Number of times to retry failed operations</small>
+            </div>
+
+            <div class="form-group">
+              <label for="timeout">Request Timeout</label>
+              <div class="input-group">
+                <input type="number" id="timeout" min="5000" max="60000" step="1000" value="30000">
+                <span>ms</span>
+              </div>
+              <small>Timeout for API requests</small>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="debugMode">
+                <span>Debug Mode</span>
+              </label>
+              <small>Enable detailed logging for troubleshooting</small>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="highlightFields">
+                <span>Highlight Fields</span>
+              </label>
+              <small>Highlight form fields as they are being filled</small>
+            </div>
+
+            <div class="danger-zone">
+              <h4>Danger Zone</h4>
+              <button id="clearLogsBtn" class="btn btn-danger">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+                Clear All Logs
+              </button>
+              <button id="resetSettingsBtn" class="btn btn-danger">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 1118 0M3 12l6-6m-6 6l6 6"/>
+                </svg>
+                Reset to Defaults
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="status" id="saveStatus"></div>
+        <button id="saveSettingsBtn" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Save Settings
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="sidebar.js"></script>

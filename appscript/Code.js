@@ -174,7 +174,8 @@ function getUnprocessedLeadsAPIController() {
 
   var leads = [];
 
-  // Start from row 2 (skip header)
+  // Skip first row (index 0) - it contains column headers
+  // Start from index 1 which is the first data row
   for (var i = 1; i < data.length; i++) {
     var isProcessed = false;
 
@@ -284,13 +285,14 @@ function getSheet() {
 
 /**
  * Parse leads from raw data array
- * @param {Array} data - Raw data from sheet
+ * @param {Array} data - Raw data from sheet (first row is header, skipped)
  * @returns {Array} Array of lead objects
  */
 function parseLeadsFromData(data) {
   var leads = [];
 
-  // Start from row 2 (skip header)
+  // Skip first row (index 0) - it contains column headers
+  // Start from index 1 which is the first data row
   for (var i = 1; i < data.length; i++) {
     var lead = parseLeadFromRow(data[i], i);
     leads.push(lead);
