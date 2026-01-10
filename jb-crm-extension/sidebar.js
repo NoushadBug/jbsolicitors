@@ -26,7 +26,8 @@ const elements = {
   logContent: document.getElementById('logContent'),
   clearLogBtn: document.getElementById('clearLogBtn'),
   optionsBtn: document.getElementById('optionsBtn'),
-  refreshBtn: document.getElementById('refreshBtn')
+  refreshBtn: document.getElementById('refreshBtn'),
+  closeBtn: document.getElementById('closeBtn')
 };
 
 // Initialize
@@ -59,6 +60,15 @@ function setupEventListeners() {
   elements.refreshBtn.addEventListener('click', () => {
     checkConnection();
     addLog('info', 'Refreshing connection...');
+  });
+  elements.closeBtn.addEventListener('click', closeSidebar);
+}
+
+function closeSidebar() {
+  chrome.runtime.sendMessage({ type: 'CLOSE_SIDEBAR' }, (response) => {
+    if (response && response.success) {
+      addLog('info', 'Sidebar closed');
+    }
   });
 }
 

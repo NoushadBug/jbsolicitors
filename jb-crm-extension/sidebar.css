@@ -21,7 +21,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   background: var(--bg-color);
   color: var(--text-primary);
-  width: var(--sidebar-width);
+  width: auto;
   min-height: 100vh;
 }
 
@@ -49,6 +49,11 @@ body {
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
 }
 
 .icon-btn {

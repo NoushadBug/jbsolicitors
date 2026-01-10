@@ -35,7 +35,10 @@
       "mcp__supabase__get_advisors",
       "mcp__supabase__get_logs",
       "Bash(where:*)",
-      "Bash(npm init:*)"
+      "Bash(npm init:*)",
+      "Bash(for file in *.js)",
+      "Bash(do:*)",
+      "Bash(done:*)"
     ]
   },
   "enabledMcpjsonServers": [

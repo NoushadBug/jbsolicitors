@@ -17,7 +17,7 @@ let failedLeads = [];
 // Configuration
 let config = {
   apiUrl: '',
-  batchDelay: 2000, // Delay between leads in ms
+  batchDelay: 2000,
   autoStart: false,
   retryAttempts: 3
 };
@@ -26,7 +26,6 @@ let config = {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[JB Solicitors] Extension installed');
 
-  // Set default configuration
   chrome.storage.sync.get({
     apiUrl: '',
     batchDelay: 2000,
@@ -36,7 +35,6 @@ chrome.runtime.onInstalled.addListener(() => {
     config = { ...config, ...result };
   });
 
-  // Create context menu for quick actions
   chrome.contextMenus.create({
     id: 'fillCurrentForm',
     title: 'Fill CRM Form from Next Lead',
@@ -47,7 +45,6 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   console.log('[JB Solicitors] Extension started');
 
-  // Load configuration
   chrome.storage.sync.get({
     apiUrl: '',
     batchDelay: 2000,
@@ -65,16 +62,23 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
-// Note: Side panel opens automatically when extension icon is clicked
-// No need for chrome.action.onClicked when using side_panel in manifest
-
-// Handle messages from popup and content scripts
+// Handle all messages from sidebar, content scripts, etc.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'CLOSE_SIDEBAR') {
+    chrome.sidePanel.setOptions({ enabled: false }).then(() => {
+      setTimeout(() => {
+        chrome.sidePanel.setOptions({ enabled: true });
+      }, 100);
+    });
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (request.type === 'START_AUTOMATION') {
     startAutomation(request.leads)
       .then(result => sendResponse({ type: 'COMPLETE', success: true }))
       .catch(error => sendResponse({ type: 'COMPLETE', success: false, error: error.message }));
-    return true; // Keep channel open
+    return true;
   }
 
   if (request.type === 'STOP_AUTOMATION') {
@@ -96,8 +100,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === 'LOG') {
-    // Forward log to popup if open
-    broadcastToPopup(request);
+    broadcastToSidebar(request);
     return true;
   }
 });
@@ -115,21 +118,17 @@ async function startAutomation(leads) {
 
   log('info', `Starting automation for ${leads.length} leads`);
 
-  // Get active tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   if (!tab) {
     throw new Error('No active tab found. Please open the CRM page.');
   }
 
-  // Check if user is on the correct CRM page
   if (!tab.url || !tab.url.startsWith(CRM_URL)) {
-    // Open CRM in new tab
     log('warning', `Opening CRM page: ${CRM_URL}${CRM_REQUIRED_PATH}`);
     await chrome.tabs.create({ url: `${CRM_URL}${CRM_REQUIRED_PATH}`, active: true });
-    await delay(2000); // Wait for page to load
+    await delay(2000);
 
-    // Get the new tab
     const [newTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     return processLeadsInTab(newTab.id, leads);
   }
@@ -138,7 +137,6 @@ async function startAutomation(leads) {
 }
 
 async function processLeadsInTab(tabId, leads) {
-  // Process each lead
   for (let i = 0; i < leads.length; i++) {
     const lead = leads[i];
     const progress = {
@@ -147,18 +145,14 @@ async function processLeadsInTab(tabId, leads) {
       lead: lead
     };
 
-    // Update progress
-    broadcastToPopup({ type: 'PROGRESS', ...progress });
+    broadcastToSidebar({ type: 'PROGRESS', ...progress });
     log('info', `Processing lead ${i + 1}/${leads.length}: ${lead.givenName} ${lead.lastName}`);
 
     try {
-      // Fill the form
       const result = await fillLeadInTab(tabId, lead);
 
       if (result.success) {
-        // Mark lead as processed in API
         await markLeadProcessed(lead.rowIndex);
-
         processedLeads.push(lead);
         log('success', `Successfully processed: ${lead.givenName} ${lead.lastName}`);
       } else {
@@ -169,15 +163,12 @@ async function processLeadsInTab(tabId, leads) {
       log('error', `Failed to process ${lead.givenName} ${lead.lastName}: ${error.message}`);
     }
 
-    // Wait before next lead (except for the last one)
     if (i < leads.length - 1) {
       await delay(config.batchDelay);
     }
   }
 
   isProcessing = false;
-
-  // Summary
   log('info', `Automation complete: ${processedLeads.length} succeeded, ${failedLeads.length} failed`);
 
   if (failedLeads.length > 0) {
@@ -192,7 +183,6 @@ async function stopAutomation() {
 
 async function fillLeadInTab(tabId, lead) {
   return new Promise((resolve, reject) => {
-    // Set up listener for response
     const listener = (request, sender) => {
       if (request.type === 'FORM_COMPLETE') {
         chrome.runtime.onMessage.removeListener(listener);
@@ -206,13 +196,11 @@ async function fillLeadInTab(tabId, lead) {
 
     chrome.runtime.onMessage.addListener(listener);
 
-    // Send message to content script
     chrome.tabs.sendMessage(tabId, {
       type: 'FILL_FORM',
       lead: lead
     });
 
-    // Timeout after 30 seconds
     setTimeout(() => {
       chrome.runtime.onMessage.removeListener(listener);
       reject(new Error('Timeout: Form filling took too long'));
@@ -237,7 +225,6 @@ async function markLeadProcessed(rowIndex) {
     }
   } catch (error) {
     console.error('Failed to mark lead as processed:', error);
-    // Don't throw - this is not critical
   }
 }
 
@@ -249,7 +236,6 @@ function delay(ms) {
 function log(level, message) {
   console.log(`[JB Solicitors] [${level.toUpperCase()}] ${message}`);
 
-  // Also save to storage
   chrome.storage.local.get({ logs: [] }, (result) => {
     const logs = result.logs || [];
     logs.push({
@@ -258,7 +244,6 @@ function log(level, message) {
       timestamp: Date.now()
     });
 
-    // Keep only last 100 logs
     if (logs.length > 100) {
       logs.shift();
     }
@@ -267,14 +252,13 @@ function log(level, message) {
   });
 }
 
-function broadcastToPopup(message) {
-  // Try to send to popup (if open)
+function broadcastToSidebar(message) {
   chrome.runtime.sendMessage(message).catch(() => {
-    // Popup is not open, ignore
+    // Sidebar not open, ignore
   });
 }
 
-// Alarm for periodic sync (optional)
+// Alarm for periodic sync
 chrome.alarms.create('syncLeads', { periodInMinutes: 30 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -287,7 +271,6 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
       if (data.success && data.leads && data.leads.length > 0) {
         log('info', `Found ${data.leads.length} new leads`);
-        // Notify user
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icons/icon128.png',
@@ -302,11 +285,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// Handle notification button clicks
 chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
   if (buttonIndex === 0) {
-    // Open popup
-    chrome.action.openPopup();
+    chrome.sidePanel.open();
   }
   chrome.notifications.clear(notificationId);
 });
