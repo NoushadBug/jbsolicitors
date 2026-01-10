@@ -1,47 +1,54 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(clasp push:*)",
-      "Bash(clasp status:*)",
+      "Bash(find *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(clasp push *)",
+      "Bash(clasp status *)",
       "Bash(git push)",
-      "Bash(npm create:*)",
-      "Bash(npm install:*)",
-      "Bash(npm run build:*)",
-      "Bash(tree:*)",
-      "Bash(convert:*)",
-      "Bash(icons/icon128.png)",
-      "Bash(icons/icon48.png)",
-      "Bash(icons/icon16.png)",
-      "Bash(icons/icon64.png)",
-      "Bash(icons/icon32.png)",
-      "Bash(cat:*)",
-      "Bash(node:*)",
-      "Bash(echo:*)",
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(npm run build *)",
+      "Bash(tree *)",
+      "Bash(convert *)",
+      "Bash(cat *)",
+      "Bash(node *)",
+      "Bash(echo *)",
       "Bash(npm run dev)",
-      "Bash(npx vite build:*)",
-      "Bash(npm run watch:*)",
+      "Bash(npx vite build *)",
+      "Bash(npm run watch *)",
+      "Bash(supabase secrets set *)",
+      "Bash(where *)",
+      "Bash(npm init *)",
       "mcp__supabase__apply_migration",
       "mcp__supabase__list_tables",
       "mcp__supabase__list_storage_buckets",
       "mcp__supabase__list_edge_functions",
       "mcp__supabase__deploy_edge_function",
-      "Bash(supabase secrets set:*)",
       "mcp__supabase__get_publishable_keys",
       "mcp__supabase__execute_sql",
       "mcp__supabase__get_advisors",
       "mcp__supabase__get_logs",
-      "Bash(where:*)",
-      "Bash(npm init:*)",
-      "Bash(for file in *.js)",
-      "Bash(do:*)",
-      "Bash(done:*)"
+      "WebSearch"
     ]
   },
   "enabledMcpjsonServers": [
     "supabase"
-  ]
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review our work. If you learned anything new about this project's patterns, bugs, or architecture, concisely append them to 'CLAUDE.md' as bullet points under a '### Lessons Learned' section. If nothing new was discovered, do nothing.",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
 }
