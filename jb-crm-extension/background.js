@@ -1,47 +1,61 @@
 /**
  * Background Service Worker for JB Solicitors CRM Automation
  * CRM: https://portal.redraincorp.com/enquiriesSummary
- * Manages automation workflow and API communication
+ *
+ * Designed for Manifest V3 service worker lifecycle:
+ * - State persisted to chrome.storage for restart survival
+ * - Automation broken into alarm-based steps
+ * - Keep-alive mechanism during active processing
  */
 
-// CRM Configuration
-const CRM_URL = 'https://portal.redraincorp.com';
-const CRM_REQUIRED_PATH = '/enquiriesSummary';
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
-// State
-let isProcessing = false;
-let currentLeads = [];
-let processedLeads = [];
-let failedLeads = [];
-
-// Configuration
-let config = {
-  apiUrl: '',
-  batchDelay: 2000,
-  autoStart: false,
-  retryAttempts: 3
+const CRM_CONFIG = {
+  url: 'https://portal.redraincorp.com',
+  path: '/enquiriesSummary',
+  defaultAssignee: 'Audrey',
+  defaultSource: 'Other',
+  defaultAreaOfLaw: 'Advice'
 };
 
+const STORAGE_KEYS = {
+  STATE: 'automationState',
+  CONFIG: 'automationConfig',
+  LEADS: 'automationLeads',
+  LOGS: 'automationLogs'
+};
+
+const ALARM_NAMES = {
+  PROCESS_NEXT_LEAD: 'processNextLead',
+  KEEP_ALIVE: 'keepAlive'
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
 // Enable side panel toggle on extension icon click
-// This must be called at the top level to ensure it's set immediately
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
 
-// Initialize on install/startup
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[JB Solicitors] Extension installed');
+chrome.runtime.onInstalled.addListener(async () => {
+  console.log('[JB CRM] Extension installed/updated');
 
-  // Enable side panel toggle when clicking the extension icon
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  // Enable side panel toggle
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-  chrome.storage.sync.get({
+  // Initialize default config
+  const { config } = await chrome.storage.sync.get({ config: {} });
+  const defaultConfig = {
     apiUrl: '',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3
-  }, (result) => {
-    config = { ...config, ...result };
-  });
+  };
+  await chrome.storage.sync.set({ config: { ...defaultConfig, ...config } });
 
+  // Create context menu
   chrome.contextMenus.create({
     id: 'fillCurrentForm',
     title: 'Fill CRM Form from Next Lead',
@@ -49,187 +63,511 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  console.log('[JB Solicitors] Extension started');
+chrome.runtime.onStartup.addListener(async () => {
+  console.log('[JB CRM] Extension started');
 
-  // Ensure side panel toggle is enabled on startup
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  // Ensure side panel toggle is enabled
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-  chrome.storage.sync.get({
+  // Load config
+  await loadConfig();
+
+  // Check for incomplete automation and restore
+  const state = await getState();
+  if (state.isProcessing && state.currentLeadIndex < state.totalLeads) {
+    console.log('[JB CRM] Restoring incomplete automation');
+    // Resume from where we left off
+    await scheduleNextLead();
+  }
+});
+
+// ============================================================================
+// STORAGE HELPERS
+// ============================================================================
+
+async function getState() {
+  const { automationState } = await chrome.storage.local.get({ automationState: createInitialState() });
+  return automationState;
+}
+
+async function setState(updates) {
+  const currentState = await getState();
+  const newState = { ...currentState, ...updates };
+  await chrome.storage.local.set({ automationState: newState });
+  return newState;
+}
+
+async function getLeads() {
+  const { automationLeads } = await chrome.storage.local.get({ automationLeads: [] });
+  return automationLeads;
+}
+
+async function setLeads(leads) {
+  await chrome.storage.local.set({ automationLeads: leads });
+}
+
+async function getConfig() {
+  const { config } = await chrome.storage.sync.get({ config: createDefaultConfig() });
+  return config;
+}
+
+async function setConfig(updates) {
+  const currentConfig = await getConfig();
+  const newConfig = { ...currentConfig, ...updates };
+  await chrome.storage.sync.set({ config: newConfig });
+  return newConfig;
+}
+
+function createInitialState() {
+  return {
+    isProcessing: false,
+    currentLeadIndex: 0,
+    totalLeads: 0,
+    processedCount: 0,
+    failedCount: 0,
+    crmTabId: null,
+    startTime: null,
+    lastActivityTime: null
+  };
+}
+
+function createDefaultConfig() {
+  return {
     apiUrl: '',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3
-  }, (result) => {
-    config = { ...config, ...result };
-  });
-});
+  };
+}
 
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+async function loadConfig() {
+  const { config } = await chrome.storage.sync.get({ config: createDefaultConfig() });
+  return config;
+}
+
+// ============================================================================
+// CONTEXT MENU
+// ============================================================================
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'fillCurrentForm') {
-    chrome.tabs.sendMessage(tab.id, { type: 'GET_NEXT_LEAD' });
+    const crmTab = await getOrCreateCrmTab();
+    if (crmTab) {
+      chrome.tabs.sendMessage(crmTab.id, { type: 'GET_NEXT_LEAD' });
+    }
   }
 });
 
-// Handle all messages from sidebar, content scripts, etc.
+// ============================================================================
+// MESSAGE HANDLING
+// ============================================================================
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'CLOSE_SIDEBAR') {
-    chrome.sidePanel.setOptions({ enabled: false }).then(() => {
-      setTimeout(() => {
-        chrome.sidePanel.setOptions({ enabled: true });
-      }, 100);
-    });
-    sendResponse({ success: true });
-    return true;
-  }
+  console.log('[JB CRM] Message:', request.type);
 
-  if (request.type === 'START_AUTOMATION') {
-    startAutomation(request.leads)
-      .then(result => sendResponse({ type: 'COMPLETE', success: true }))
-      .catch(error => sendResponse({ type: 'COMPLETE', success: false, error: error.message }));
-    return true;
-  }
+  switch (request.type) {
+    case 'CLOSE_SIDEBAR':
+      handleCloseSidebar(sendResponse);
+      return true;
 
-  if (request.type === 'STOP_AUTOMATION') {
-    stopAutomation();
-    sendResponse({ success: true });
-    return true;
-  }
+    case 'START_AUTOMATION':
+      handleStartAutomation(request.leads, sendResponse);
+      return true;
 
-  if (request.type === 'GET_CONFIG') {
-    sendResponse({ config });
-    return true;
-  }
+    case 'STOP_AUTOMATION':
+      handleStopAutomation(sendResponse);
+      return true;
 
-  if (request.type === 'UPDATE_CONFIG') {
-    config = { ...config, ...request.config };
-    chrome.storage.sync.set(request.config);
-    sendResponse({ success: true });
-    return true;
-  }
+    case 'GET_STATE':
+      getState().then(state => sendResponse({ state }));
+      return true;
 
-  if (request.type === 'LOG') {
-    broadcastToSidebar(request);
-    return true;
+    case 'GET_CONFIG':
+      getConfig().then(config => sendResponse({ config }));
+      return true;
+
+    case 'UPDATE_CONFIG':
+      setConfig(request.config).then(config => sendResponse({ success: true, config }));
+      return true;
+
+    case 'LOG':
+      handleLog(request);
+      sendResponse({ success: true });
+      return true;
+
+    case 'PING':
+      sendResponse({ success: true, message: 'PONG' });
+      return true;
+
+    default:
+      sendResponse({ success: false, error: 'Unknown message type' });
   }
 });
 
-// Automation functions
-async function startAutomation(leads) {
-  if (isProcessing) {
-    throw new Error('Automation already in progress');
-  }
+async function handleCloseSidebar(sendResponse) {
+  await chrome.sidePanel.setOptions({ enabled: false });
+  await delay(100);
+  await chrome.sidePanel.setOptions({ enabled: true });
+  sendResponse({ success: true });
+}
 
-  isProcessing = true;
-  currentLeads = leads;
-  processedLeads = [];
-  failedLeads = [];
+async function handleStartAutomation(leads, sendResponse) {
+  try {
+    const state = await getState();
 
-  log('info', `Starting automation for ${leads.length} leads`);
+    if (state.isProcessing) {
+      sendResponse({ success: false, error: 'Automation already in progress' });
+      return;
+    }
 
-  // Look for existing CRM tab
-  const tabs = await chrome.tabs.query({ url: `${CRM_URL}/*` });
+    if (!leads || leads.length === 0) {
+      sendResponse({ success: false, error: 'No leads to process' });
+      return;
+    }
 
-  if (tabs.length > 0) {
-    // Found existing CRM tab, navigate to enquiriesSummary
-    const crmTab = tabs[0];
-    log('info', `Found existing CRM tab, navigating to: ${CRM_URL}${CRM_REQUIRED_PATH}`);
-
-    await chrome.tabs.update(crmTab.id, {
-      url: `${CRM_URL}${CRM_REQUIRED_PATH}`,
-      active: true
+    // Initialize automation state
+    await setState({
+      isProcessing: true,
+      currentLeadIndex: 0,
+      totalLeads: leads.length,
+      processedCount: 0,
+      failedCount: 0,
+      startTime: Date.now(),
+      lastActivityTime: Date.now()
     });
 
-    await delay(2000);
-    return processLeadsInTab(crmTab.id, leads);
+    // Store leads
+    await setLeads(leads);
+
+    // Get or create CRM tab and switch to it
+    const crmTab = await getOrCreateCrmTab();
+    if (!crmTab) {
+      await setState({ isProcessing: false });
+      sendResponse({ success: false, error: 'Could not open CRM tab' });
+      return;
+    }
+
+    await setState({ crmTabId: crmTab.id });
+
+    log('info', `Starting automation for ${leads.length} leads`);
+    broadcastToSidebar({ type: 'AUTOMATION_STARTED', totalLeads: leads.length });
+
+    // Start processing
+    await scheduleNextLead();
+
+    sendResponse({ success: true });
+  } catch (error) {
+    log('error', `Failed to start automation: ${error.message}`);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+async function handleStopAutomation(sendResponse) {
+  await stopAutomation('Stopped by user');
+  sendResponse({ success: true });
+}
+
+function handleLog(request) {
+  addLog(request.level, request.message);
+  broadcastToSidebar(request);
+}
+
+// ============================================================================
+// AUTOMATION WORKFLOW (Alarm-based)
+// ============================================================================
+
+/**
+ * Schedule the next lead for processing using chrome.alarms
+ * This breaks the long-running loop into individual steps
+ */
+async function scheduleNextLead() {
+  // Clear any existing alarms
+  await chrome.alarms.clear(ALARM_NAMES.PROCESS_NEXT_LEAD);
+
+  // Schedule immediate processing of next lead
+  chrome.alarms.create(ALARM_NAMES.PROCESS_NEXT_LEAD, { delayInMinutes: 0.01 });
+
+  // Set up keep-alive to prevent service worker termination
+  await setupKeepAlive();
+}
+
+/**
+ * Process a single lead when alarm fires
+ */
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === ALARM_NAMES.PROCESS_NEXT_LEAD) {
+    await processNextLead();
+  } else if (alarm.name === ALARM_NAMES.KEEP_ALIVE) {
+    // Keep-alive alarm - just touch storage to keep service worker alive
+    const state = await getState();
+    if (state.isProcessing) {
+      await setState({ lastActivityTime: Date.now() });
+    }
+  }
+});
+
+async function processNextLead() {
+  const state = await getState();
+  const leads = await getLeads();
+  const config = await getConfig();
+
+  if (!state.isProcessing) {
+    await cleanupKeepAlive();
+    return;
   }
 
-  // No CRM tab found, create new one
-  log('info', `No CRM tab found, opening: ${CRM_URL}${CRM_REQUIRED_PATH}`);
-  const newTab = await chrome.tabs.create({
-    url: `${CRM_URL}${CRM_REQUIRED_PATH}`,
-    active: true
+  // Check if we've processed all leads
+  if (state.currentLeadIndex >= leads.length) {
+    await completeAutomation();
+    return;
+  }
+
+  const lead = leads[state.currentLeadIndex];
+
+  log('info', `Processing lead ${state.currentLeadIndex + 1}/${state.totalLeads}: ${lead.givenName} ${lead.lastName}`);
+  broadcastToSidebar({
+    type: 'PROGRESS',
+    current: state.currentLeadIndex + 1,
+    total: state.totalLeads,
+    lead: lead
   });
 
-  await delay(2000);
-  return processLeadsInTab(newTab.id, leads);
-}
+  try {
+    // Get CRM tab
+    let crmTab = state.crmTabId ? await chrome.tabs.get(state.crmTabId).catch(() => null) : null;
 
-async function processLeadsInTab(tabId, leads) {
-  for (let i = 0; i < leads.length; i++) {
-    const lead = leads[i];
-    const progress = {
-      current: i + 1,
-      total: leads.length,
-      lead: lead
-    };
-
-    broadcastToSidebar({ type: 'PROGRESS', ...progress });
-    log('info', `Processing lead ${i + 1}/${leads.length}: ${lead.givenName} ${lead.lastName}`);
-
-    try {
-      const result = await fillLeadInTab(tabId, lead);
-
-      if (result.success) {
-        await markLeadProcessed(lead.rowIndex);
-        processedLeads.push(lead);
-        log('success', `Successfully processed: ${lead.givenName} ${lead.lastName}`);
-      } else {
-        throw new Error(result.error || 'Failed to fill form');
+    if (!crmTab || crmTab.status !== 'complete') {
+      // Tab is closed or not ready, get or create new one
+      crmTab = await getOrCreateCrmTab();
+      if (!crmTab) {
+        throw new Error('Could not access CRM tab');
       }
-    } catch (error) {
-      failedLeads.push({ lead, error: error.message });
-      log('error', `Failed to process ${lead.givenName} ${lead.lastName}: ${error.message}`);
+      await setState({ crmTabId: crmTab.id });
     }
 
-    if (i < leads.length - 1) {
-      await delay(config.batchDelay);
+    // Switch to CRM tab
+    await chrome.tabs.update(crmTab.id, { active: true });
+
+    // Process the lead
+    const result = await fillLeadInTab(crmTab.id, lead);
+
+    if (result.success) {
+      // Mark as processed in the sheet
+      await markLeadProcessed(lead.rowIndex);
+
+      // Update state
+      const newState = await setState({
+        currentLeadIndex: state.currentLeadIndex + 1,
+        processedCount: state.processedCount + 1,
+        lastActivityTime: Date.now()
+      });
+
+      log('success', `Successfully processed: ${lead.givenName} ${lead.lastName}`);
+      broadcastToSidebar({
+        type: 'LEAD_PROCESSED',
+        success: true,
+        lead: lead,
+        progress: { current: newState.currentLeadIndex, total: newState.totalLeads }
+      });
+
+      // Schedule next lead with delay
+      const delayMs = newState.currentLeadIndex < newState.totalLeads ? config.batchDelay : 0;
+      setTimeout(() => scheduleNextLead(), delayMs);
+    } else {
+      throw new Error(result.error || 'Failed to fill form');
     }
+  } catch (error) {
+    log('error', `Failed to process ${lead.givenName} ${lead.lastName}: ${error.message}`);
+
+    const newState = await setState({
+      currentLeadIndex: state.currentLeadIndex + 1,
+      failedCount: state.failedCount + 1,
+      lastActivityTime: Date.now()
+    });
+
+    broadcastToSidebar({
+      type: 'LEAD_PROCESSED',
+      success: false,
+      lead: lead,
+      error: error.message,
+      progress: { current: newState.currentLeadIndex, total: newState.totalLeads }
+    });
+
+    // Continue with next lead
+    setTimeout(() => scheduleNextLead(), config.batchDelay);
   }
-
-  isProcessing = false;
-  log('info', `Automation complete: ${processedLeads.length} succeeded, ${failedLeads.length} failed`);
-
-  if (failedLeads.length > 0) {
-    log('warning', `Failed leads: ${failedLeads.map(f => f.lead.givenName + ' ' + f.lead.lastName).join(', ')}`);
-  }
-}
-
-async function stopAutomation() {
-  isProcessing = false;
-  log('info', 'Automation stopped by user');
 }
 
 async function fillLeadInTab(tabId, lead) {
   return new Promise((resolve, reject) => {
-    const listener = (request, sender) => {
-      if (request.type === 'FORM_COMPLETE') {
-        chrome.runtime.onMessage.removeListener(listener);
-        if (request.success) {
-          resolve(request);
-        } else {
-          reject(new Error(request.error));
-        }
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
+    let completed = false;
 
     chrome.tabs.sendMessage(tabId, {
       type: 'FILL_FORM',
       lead: lead
+    }, (response) => {
+      if (completed) return;
+      completed = true;
+
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      if (response && response.success) {
+        resolve(response);
+      } else {
+        reject(new Error(response?.error || 'Failed to fill form'));
+      }
     });
 
+    // Timeout after 30 seconds
     setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(listener);
-      reject(new Error('Timeout: Form filling took too long'));
+      if (completed) return;
+      completed = true;
+      reject(new Error('Timeout: Form filling took too long (30s)'));
     }, 30000);
   });
 }
 
+async function completeAutomation() {
+  const state = await getState();
+  const duration = Date.now() - state.startTime;
+
+  await setState({
+    isProcessing: false,
+    currentLeadIndex: 0,
+    totalLeads: 0,
+    startTime: null
+  });
+
+  await cleanupKeepAlive();
+
+  log('info', `Automation complete: ${state.processedCount} succeeded, ${state.failedCount} failed in ${Math.round(duration / 1000)}s`);
+  broadcastToSidebar({
+    type: 'AUTOMATION_COMPLETE',
+    processed: state.processedCount,
+    failed: state.failedCount,
+    duration: duration
+  });
+
+  // Clear leads from storage
+  await setLeads([]);
+
+  // Show notification
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'JB Solicitors - Automation Complete',
+    message: `Processed ${state.processedCount} leads successfully. ${state.failedCount} failed.`
+  });
+}
+
+async function stopAutomation(reason) {
+  const state = await getState();
+
+  await setState({
+    isProcessing: false,
+    currentLeadIndex: 0,
+    totalLeads: 0
+  });
+
+  await cleanupKeepAlive();
+
+  log('info', `Automation stopped: ${reason}`);
+  broadcastToSidebar({ type: 'AUTOMATION_STOPPED', reason });
+}
+
+// ============================================================================
+// KEEP-ALIVE MECHANISM
+// ============================================================================
+
+/**
+ * Set up keep-alive alarm to prevent service worker termination
+ * during active automation
+ */
+async function setupKeepAlive() {
+  // Create repeating alarm that fires every 20 seconds
+  // Chrome service worker terminates after ~30 seconds of inactivity
+  chrome.alarms.create(ALARM_NAMES.KEEP_ALIVE, { periodInMinutes: 0.33 });
+}
+
+/**
+ * Clean up keep-alive alarm when automation is complete
+ */
+async function cleanupKeepAlive() {
+  await chrome.alarms.clear(ALARM_NAMES.KEEP_ALIVE);
+}
+
+// ============================================================================
+// TAB MANAGEMENT
+// ============================================================================
+
+/**
+ * Find existing CRM tab or create a new one
+ * Returns the CRM tab or null if failed
+ */
+async function getOrCreateCrmTab() {
+  const crmUrl = `${CRM_CONFIG.url}${CRM_CONFIG.path}`;
+
+  // First, look for existing CRM tab
+  const tabs = await chrome.tabs.query({ url: `${CRM_CONFIG.url}/*` });
+
+  if (tabs.length > 0) {
+    // Found existing CRM tab
+    const crmTab = tabs.find(tab => tab.url.includes(CRM_CONFIG.path)) || tabs[0];
+
+    // Make sure it's on the correct path
+    if (!crmTab.url.includes(CRM_CONFIG.path)) {
+      await chrome.tabs.update(crmTab.id, { url: crmUrl });
+      await delay(1000);
+    }
+
+    return crmTab;
+  }
+
+  // No CRM tab found, create new one
+  try {
+    const newTab = await chrome.tabs.create({
+      url: crmUrl,
+      active: true
+    });
+
+    // Wait for tab to load
+    await delay(2000);
+
+    return newTab;
+  } catch (error) {
+    log('error', `Failed to create CRM tab: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Ensure CRM tab is active (switch to it)
+ */
+async function switchToCrmTab() {
+  const crmTab = await getOrCreateCrmTab();
+  if (crmTab) {
+    await chrome.tabs.update(crmTab.id, { active: true });
+    await chrome.windows.update(crmTab.windowId, { focused: true });
+  }
+  return crmTab;
+}
+
+// ============================================================================
+// API COMMUNICATION
+// ============================================================================
+
 async function markLeadProcessed(rowIndex) {
   try {
+    const config = await getConfig();
+
+    if (!config.apiUrl) {
+      console.warn('[JB CRM] No API URL configured, skipping markLeadProcessed');
+      return;
+    }
+
     const response = await fetch(
       `${config.apiUrl}?action=markLeadProcessed&rowIndex=${rowIndex}`
     );
@@ -243,19 +581,23 @@ async function markLeadProcessed(rowIndex) {
     if (!data.success) {
       throw new Error(data.error || 'Failed to mark lead as processed');
     }
+
+    console.log('[JB CRM] Marked lead as processed:', rowIndex);
   } catch (error) {
-    console.error('Failed to mark lead as processed:', error);
+    console.error('[JB CRM] Failed to mark lead as processed:', error);
   }
 }
 
-// Helper functions
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+// ============================================================================
+// LOGGING
+// ============================================================================
 
 function log(level, message) {
-  console.log(`[JB Solicitors] [${level.toUpperCase()}] ${message}`);
+  console.log(`[JB CRM] [${level.toUpperCase()}] ${message}`);
+  addLog(level, message);
+}
 
+function addLog(level, message) {
   chrome.storage.local.get({ logs: [] }, (result) => {
     const logs = result.logs || [];
     logs.push({
@@ -264,6 +606,7 @@ function log(level, message) {
       timestamp: Date.now()
     });
 
+    // Keep only last 100 logs
     if (logs.length > 100) {
       logs.shift();
     }
@@ -278,11 +621,20 @@ function broadcastToSidebar(message) {
   });
 }
 
-// Alarm for periodic sync
+// ============================================================================
+// PERIODIC SYNC
+// ============================================================================
+
 chrome.alarms.create('syncLeads', { periodInMinutes: 30 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'syncLeads' && config.autoStart) {
+  if (alarm.name === 'syncLeads') {
+    const config = await getConfig();
+
+    if (!config.autoStart || !config.apiUrl) {
+      return;
+    }
+
     log('info', 'Auto-sync triggered');
 
     try {
@@ -305,9 +657,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
 chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
   if (buttonIndex === 0) {
     chrome.sidePanel.open();
   }
   chrome.notifications.clear(notificationId);
 });
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}

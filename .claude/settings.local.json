@@ -44,8 +44,8 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Review the work completed. If you learned anything new about this project's patterns, bugs, or architecture that should be documented: 1) Read the CLAUDE.md file, 2) Add a concise bullet point under '### Lessons Learned' section (create it if it doesn't exist), 3) Save the file. Then ALWAYS respond with valid JSON: {\"ok\": true, \"reason\": \"brief summary of what was done or if nothing new to document\"}. If there was an error, respond: {\"ok\": false, \"reason\": \"error description\"}. Do not include any text outside the JSON.",
-            "timeout": 60
+            "prompt": "Input: $ARGUMENTS\n\nReview the work completed. If you learned anything new about this project's patterns, bugs, or architecture that should be documented: 1) Read the CLAUDE.md file, 2) Add a concise bullet point under '### Lessons Learned' section (create it if it doesn't exist), 3) Save the file.\n\nIMPORTANT: You must respond with ONLY valid JSON, no other text. Use this exact format:\n{\"ok\": true, \"reason\": \"summary\"}\n\nIf there was an error, use:\n{\"ok\": false, \"reason\": \"error description\"}",
+            "timeout": 120
           }
         ]
       }
