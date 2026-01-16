@@ -98,61 +98,84 @@ function handleAsyncResponse(promise, sendResponse) {
  * @param {string} inputSelector - CSS selector for the autocomplete input
  * @param {Array<string>} substrings - Text fragments to match option text
  * @param {Function} [callback] - Optional callback after selection
+ * @param {number} [maxRetries] - Maximum number of retries if input not found
  */
-function selectMUIAutocompleteBySelector(inputSelector, substrings, callback) {
+function selectMUIAutocompleteBySelector(inputSelector, substrings, callback, maxRetries = 10) {
   return new Promise((resolve, reject) => {
-    // Step 0: Find input
-    const input = document.querySelector(inputSelector);
-    if (!input) {
-      reject(new Error('Input not found: ' + inputSelector));
-      return;
-    }
+    let retryCount = 0;
 
-    // Step 1: Find the autocomplete root container
-    const container = input.closest('.MuiAutocomplete-inputRoot');
-    if (!container) {
-      reject(new Error('Autocomplete container not found'));
-      return;
-    }
-
-    // Step 2: Click popup indicator (arrow)
-    const popupButton = container.querySelector('.MuiAutocomplete-popupIndicator');
-    if (!popupButton) {
-      reject(new Error('Popup indicator not found'));
-      return;
-    }
-    popupButton.click();
-
-    // Step 3: Focus and type (triggers fetch/filter)
-    input.focus();
-    input.value = substrings[0] || '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-
-    // Step 4: Observe dropdown options
-    const observer = new MutationObserver(() => {
-      const options = [...document.querySelectorAll('li[role="option"]')];
-
-      const match = options.find(opt =>
-        substrings.some(sub => opt.textContent.includes(sub))
-      );
-
-      if (match) {
-        match.click();          // updates React state
-        observer.disconnect();  // stop observing
-        console.log('Selected option containing: ' + substrings.join(' or '));
-        if (callback) callback(match);
-        resolve(match);
+    const tryFindInput = () => {
+      // Step 0: Find input
+      const input = document.querySelector(inputSelector);
+      if (!input) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          console.log('[JB CRM] Input not found, retrying (' + retryCount + '/' + maxRetries + '): ' + inputSelector);
+          setTimeout(tryFindInput, 500);
+          return;
+        }
+        reject(new Error('Input not found after ' + maxRetries + ' retries: ' + inputSelector));
+        return;
       }
-    });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+      // Step 1: Find the autocomplete root container
+      const container = input.closest('.MuiAutocomplete-inputRoot');
+      if (!container) {
+        reject(new Error('Autocomplete container not found'));
+        return;
+      }
 
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      observer.disconnect();
-      reject(new Error('Timeout waiting for dropdown options'));
-    }, 5000);
+      // Step 2: Click popup indicator (arrow) to open dropdown
+      const popupButton = container.querySelector('.MuiAutocomplete-popupIndicator');
+      if (!popupButton) {
+        reject(new Error('Popup indicator not found'));
+        return;
+      }
+      popupButton.click();
+
+      // Step 3: Focus and type (triggers fetch/filter)
+      input.focus();
+      input.value = substrings[0] || '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+
+      let matchFound = false;
+
+      // Step 4: Observe dropdown options
+      const observer = new MutationObserver(() => {
+        const options = [...document.querySelectorAll('li[role="option"]')];
+
+        const match = options.find(opt =>
+          substrings.some(sub => opt.textContent.includes(sub))
+        );
+
+        if (match) {
+          match.click();
+          matchFound = true;
+          observer.disconnect();
+          console.log('[JB CRM] Selected option containing: ' + substrings.join(' or '));
+          if (callback) callback(match);
+          resolve(match);
+        }
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      // Timeout after 5 seconds - close dropdown if value not found
+      setTimeout(() => {
+        observer.disconnect();
+
+        if (!matchFound) {
+          // Value not found - close the dropdown
+          popupButton.click();
+          console.log('[JB CRM] Dropdown closed - value not found: ' + substrings.join(', '));
+          reject(new Error('Option not found: ' + substrings.join(', ')));
+        }
+      }, 5000);
+    };
+
+    // Start trying to find the input
+    tryFindInput();
   });
 }
 
@@ -308,26 +331,35 @@ async function initializeCrm() {
   const filterButtons = document.querySelectorAll('button.MuiButtonBase-root.MuiIconButton-root[aria-label="Advanced Filter"]');
   if (filterButtons.length > 0) {
     filterButtons[0].click();
-    await delay(500);
+    // Wait longer for filter menu to render
+    await delay(1500);
   }
 
-  // Step 4: Select Audrey in Assigned To dropdown
+  // Step 4: Select Audrey in Assigned To dropdown with retry
   try {
-    await selectMUIAutocompleteBySelector('#assignedTo', ['Audrey']);
+    sendMessage('info', 'Setting filter to Audrey...');
+    await selectMUIAutocompleteBySelector('#assignedTo', ['Audrey'], null, 15);
     sendMessage('success', 'Filter set to Audrey');
+    await delay(1000);
   } catch (error) {
-    sendMessage('warning', 'Could not set filter: ' + error.message);
+    sendMessage('error', 'Could not set filter to Audrey: ' + error.message);
+    throw error;
   }
-
-  await delay(500);
 
   // Step 5: Click Apply Search (only once, at the end)
+  sendMessage('info', 'Applying search filters...');
+  let applyClicked = false;
   document.querySelectorAll('.MuiButton-label').forEach(function(e) {
-    const text = e.textContent.trim();
-    if (text === 'Apply Search') {
+    const text = e.textContent.toLowerCase().trim();
+    if (text === 'apply search' && !applyClicked) {
       e.closest('button').click();
+      applyClicked = true;
     }
   });
+
+  if (!applyClicked) {
+    sendMessage('warning', 'Apply Search button not found');
+  }
 
   // Step 6: Wait for search results
   await waitForSearchResults();
@@ -365,7 +397,7 @@ async function fillForm(lead) {
     // Step 4: Fill organization details
     await fillOrganizationDetails(lead);
 
-    // Step 5: Set fixed values (Source, Area of Law)
+    // Step 5: Set fixed values (Source, Area of Law, Source Notes)
     await setFixedValues(lead);
 
     // Step 6: Configure assignment
@@ -395,11 +427,12 @@ async function fillContactDetails(lead) {
     try {
       const titleInput = document.querySelector(drawerPrefix + 'input[aria-autocomplete="list"]');
       if (titleInput) {
-        await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', [lead.title]);
-        await delay(200);
+        await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', [lead.title], null, 15);
+        await delay(300);
       }
     } catch (e) {
       // Silently skip if title fails
+      console.log('[JB CRM] Could not set Title: ' + e.message);
     }
   }
 
@@ -478,38 +511,46 @@ async function setFixedValues(lead) {
 
   // Source = "Other" (autocomplete)
   try {
-    const sourceInputs = document.querySelectorAll(drawerPrefix + 'input[aria-autocomplete="list"]');
-    for (const input of sourceInputs) {
-      const ariaDescribedBy = input.getAttribute('aria-describedby') || '';
-      if (ariaDescribedBy.includes('autocomplete')) {
-        const label = input.closest('.MuiFormControl-root')?.querySelector('label');
-        if (label && label.textContent.includes('Source')) {
-          await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', ['Other']);
-          await delay(200);
+    // Find all autocomplete containers in the drawer (MuiAutocomplete-root)
+    const autocompleteContainers = document.querySelectorAll(drawerPrefix + '.MuiAutocomplete-root');
+    for (const container of autocompleteContainers) {
+      const label = container.querySelector('label');
+      // Use textContent for matching (works with "Source", "Source *", "Source *", etc.)
+      if (label && label.textContent.includes('Source')) {
+        // Find the input within this container
+        const input = container.querySelector('input[aria-autocomplete="list"]');
+        if (input && input.id) {
+          // Use the ID directly (dynamic ID like mui-autocomplete-18603)
+          await selectMUIAutocompleteBySelector('#' + input.id, ['Other'], null, 15);
+          await delay(300);
           break;
         }
       }
     }
   } catch (e) {
     // Silently skip
+    console.log('[JB CRM] Could not set Source: ' + e.message);
   }
 
   // Area of Law = "Advice" (autocomplete)
   try {
-    const areaInputs = document.querySelectorAll(drawerPrefix + 'input[aria-autocomplete="list"]');
-    for (const input of areaInputs) {
-      const ariaDescribedBy = input.getAttribute('aria-describedby') || '';
-      if (ariaDescribedBy.includes('autocomplete')) {
-        const label = input.closest('.MuiFormControl-root')?.querySelector('label');
-        if (label && label.textContent.includes('Area')) {
-          await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', ['Advice']);
-          await delay(200);
+    // Find all autocomplete containers in the drawer (MuiAutocomplete-root)
+    const autocompleteContainers = document.querySelectorAll(drawerPrefix + '.MuiAutocomplete-root');
+    for (const container of autocompleteContainers) {
+      const label = container.querySelector('label');
+      // Use textContent for matching (works with "Area of Law", "Area of Law *", "Area of Law *", etc.)
+      if (label && label.textContent.includes('Area')) {
+        const input = container.querySelector('input[aria-autocomplete="list"]');
+        if (input && input.id) {
+          await selectMUIAutocompleteBySelector('#' + input.id, ['Advice'], null, 15);
+          await delay(300);
           break;
         }
       }
     }
   } catch (e) {
     // Silently skip
+    console.log('[JB CRM] Could not set Area of Law: ' + e.message);
   }
 
   // Source Notes (from sheet)
@@ -536,16 +577,14 @@ async function configureAssignment() {
 
   // Assigned To = Audrey (always)
   try {
-    // Find the input with name="assignedTo" inside the drawer
     const assignedToInput = document.querySelector(drawerPrefix + '[name="assignedTo"]');
-    if (assignedToInput) {
-      // Use the ID directly if it has one, otherwise use the name selector with drawer prefix
-      const inputId = assignedToInput.id ? '#' + assignedToInput.id : drawerPrefix + '[name="assignedTo"]';
-      await selectMUIAutocompleteBySelector(inputId, ['Audrey']);
-      await delay(200);
+    if (assignedToInput && assignedToInput.id) {
+      await selectMUIAutocompleteBySelector('#' + assignedToInput.id, ['Audrey'], null, 15);
+      await delay(300);
     }
   } catch (e) {
     // Silently skip
+    console.log('[JB CRM] Could not set Assigned To: ' + e.message);
   }
 }
 

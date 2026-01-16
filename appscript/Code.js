@@ -308,14 +308,26 @@ function parseLeadsFromData(data) {
  * @returns {Object} Parsed lead object
  */
 function parseLeadFromRow(row, rowIndex) {
+  // Only include email if it has a value (not N/A or empty)
+  var email = safeGet(row, 3);
+  if (!email || email === 'N/A' || email.trim() === '') {
+    email = '';
+  }
+
+  // Only include mobile if it has a value (not N/A or empty)
+  var mobile = safeGet(row, 5);
+  if (!mobile || mobile === 'N/A' || mobile.trim() === '') {
+    mobile = '';
+  }
+
   return {
     rowIndex: rowIndex,
     title: safeGet(row, 0),
     givenName: safeGet(row, 1),
     lastName: safeGet(row, 2),
-    email: safeGet(row, 3),
+    email: email,
     telephone: safeGet(row, 4),
-    mobile: safeGet(row, 5),
+    mobile: mobile,
     source: safeGet(row, 6),
     sourceNotes: safeGet(row, 7),
     organizationName: safeGet(row, 8),
