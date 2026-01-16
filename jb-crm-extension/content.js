@@ -3,7 +3,8 @@
  * CRM: https://portal.redraincorp.com/enquiriesSummary
  *
  * This script handles all DOM interaction with the CRM portal including:
- * - Navigation to Key Opportunities
+ * - Closing sidebar
+ * - Navigating to Key Opportunities
  * - Filtering by assigned user (Audrey)
  * - Creating new contact forms
  * - Filling form fields with lead data
@@ -18,198 +19,7 @@ const CRM_CONFIG = {
   baseUrl: 'https://portal.redraincorp.com',
   defaultAssignee: 'Audrey',
   defaultSource: 'Other',
-  defaultAreaOfLaw: 'Advice',
-  timeouts: {
-    elementLoad: 10000,
-    pageLoad: 5000,
-    formSubmit: 3000,
-    dropdown: 500
-  },
-  delays: {
-    afterClick: 200,
-    afterInput: 100,
-    betweenFields: 50
-  }
-};
-
-// ============================================================================
-// DOM SELECTORS (Multiple fallback strategies)
-// ============================================================================
-
-const SELECTORS = {
-  // Navigation
-  inquiriesSection: [
-    'a[href*="inquiries"]',
-    'a[href*="enquiries"]',
-    '[data-testid*="inquiry"]',
-    '[data-testid*="enquiry"]'
-  ],
-
-  // Key Opportunities Toggle (Material UI switch)
-  keyOpportunitiesToggle: [
-    'input[name="keyOpportunity"]',
-    '[data-testid*="key-opportunity"]',
-    '.MuiSwitch-input'
-  ],
-
-  // My Key Opportunities (Semantic UI checkbox)
-  myKeyOpportunitiesCheckbox: [
-    '.ui.checkbox input[type="checkbox"]',
-    '[data-testid*="my-key-opportunity"]'
-  ],
-
-  // Apply Search button
-  applySearchButton: [
-    'button',
-    '[role="button"]',
-    '.MuiButton-root'
-  ],
-
-  // Filter button (menu icon)
-  filterButton: [
-    'button[aria-label*="filter" i]',
-    'button[aria-label*="menu" i]',
-    '.MuiIconButton-root',
-    '[data-testid*="filter"]'
-  ],
-
-  // Assigned To dropdown
-  assignedToInput: [
-    '#assignedTo',
-    'input[name="assignedTo"]',
-    '[name="assignedTo"]',
-    '[data-testid*="assigned-to"]'
-  ],
-
-  // Create/New Contact button
-  createContactButton: [
-    'button[aria-label*="create" i]',
-    'button[aria-label*="add" i]',
-    '[data-testid*="create-contact"]',
-    '[data-testid*="add-contact"]'
-  ],
-
-  // Form Fields - Personal Information
-  title: [
-    'input[name="prefix"]',
-    'input[name="title"]',
-    '[name="prefix"]',
-    '[name="title"]',
-    '[data-testid*="title"]'
-  ],
-
-  givenName: [
-    'input[name="firstName"]',
-    'input[name="givenName"]',
-    'input[name="givenname"]',
-    '[name="firstName"]',
-    '[name="givenName"]',
-    '[data-testid*="first-name"]',
-    '[data-testid*="given-name"]'
-  ],
-
-  lastName: [
-    'input[name="lastName"]',
-    'input[name="surname"]',
-    '[name="lastName"]',
-    '[name="surname"]',
-    '[data-testid*="last-name"]',
-    '[data-testid*="surname"]'
-  ],
-
-  email: [
-    'input[name="email"]',
-    'input[type="email"]',
-    '[name="email"]',
-    '[data-testid*="email"]'
-  ],
-
-  telephone: [
-    'input[name="phone"]',
-    'input[name="telephone"]',
-    'input[name="telephoneNumber"]',
-    '[name="phone"]',
-    '[name="telephone"]',
-    '[data-testid*="phone"]',
-    '[data-testid*="telephone"]'
-  ],
-
-  mobile: [
-    'input[name="mobile"]',
-    'input[name="mobileNumber"]',
-    '[name="mobile"]',
-    '[name="mobileNumber"]',
-    '[data-testid*="mobile"]'
-  ],
-
-  // Organization Details
-  organizationName: [
-    'input[name="organization"]',
-    'input[name="organizationName"]',
-    'input[name="company"]',
-    '[name="organization"]',
-    '[name="organizationName"]',
-    '[name="company"]',
-    '[data-testid*="organization"]',
-    '[data-testid*="company"]'
-  ],
-
-  position: [
-    'input[name="position"]',
-    'input[name="jobTitle"]',
-    '[name="position"]',
-    '[name="jobTitle"]',
-    '[data-testid*="position"]',
-    '[data-testid*="job-title"]'
-  ],
-
-  // Dropdown Fields
-  source: [
-    'select[name="source"]',
-    '[name="source"]',
-    '[data-testid*="source"]'
-  ],
-
-  sourceNotes: [
-    'textarea[name="sourceNotes"]',
-    'textarea[name="sourceNotes"]',
-    '[name="sourceNotes"]',
-    '[data-testid*="source-notes"]'
-  ],
-
-  areaOfLaw: [
-    'select[name="areaOfLaw"]',
-    '[name="areaOfLaw"]',
-    '[data-testid*="area-of-law"]'
-  ],
-
-  assignedTo: [
-    'select[name="assignedTo"]',
-    '[name="assignedTo"]',
-    '[data-testid*="assigned-to"]'
-  ],
-
-  followUpDue: [
-    'input[name="followUpDue"]',
-    'input[name="followup"]',
-    'input[type="date"]',
-    '[name="followUpDue"]',
-    '[data-testid*="follow-up"]'
-  ],
-
-  // Save/Submit buttons
-  saveButton: [
-    'button[type="submit"]',
-    'button[aria-label*="save" i]',
-    '[data-testid*="save"]',
-    '.MuiButton-root'
-  ],
-
-  closeButton: [
-    'button[aria-label*="close" i]',
-    'button[aria-label*="cancel" i]',
-    '[data-testid*="close"]'
-  ]
+  defaultAreaOfLaw: 'Advice'
 };
 
 // ============================================================================
@@ -218,10 +28,7 @@ const SELECTORS = {
 
 const state = {
   isInitialized: false,
-  isProcessing: false,
-  currentLead: null,
-  retryCount: 0,
-  maxRetries: 3
+  isProcessing: false
 };
 
 // ============================================================================
@@ -240,7 +47,7 @@ function init() {
 
   // Notify that content script is ready
   console.log('[JB Solicitors CRM] Content script initialized');
-  sendMessage('info', 'Content script loaded and ready');
+  sendMessage('info', 'Ready to automate');
 }
 
 // Initialize when DOM is ready
@@ -262,16 +69,8 @@ function handleMessage(request, sender, sendResponse) {
       handleAsyncResponse(fillForm(request.lead), sendResponse);
       return true;
 
-    case 'NAVIGATE_TO_OPPORTUNITIES':
-      handleAsyncResponse(navigateToKeyOpportunities(), sendResponse);
-      return true;
-
-    case 'FILTER_BY_AUDREY':
-      handleAsyncResponse(filterByAssignee(CRM_CONFIG.defaultAssignee), sendResponse);
-      return true;
-
-    case 'OPEN_NEW_CONTACT':
-      handleAsyncResponse(openNewContactForm(), sendResponse);
+    case 'INITIALIZE_CRM':
+      handleAsyncResponse(initializeCrm(), sendResponse);
       return true;
 
     case 'PING':
@@ -291,563 +90,159 @@ function handleAsyncResponse(promise, sendResponse) {
 }
 
 // ============================================================================
-// MAIN WORKFLOW FUNCTIONS
+// HELPER FUNCTIONS (From Workflow Document)
 // ============================================================================
 
 /**
- * Main workflow: Navigate, filter, create form, fill, and save
+ * Selects an option in a MUI Autocomplete using a CSS selector
+ * @param {string} inputSelector - CSS selector for the autocomplete input
+ * @param {Array<string>} substrings - Text fragments to match option text
+ * @param {Function} [callback] - Optional callback after selection
  */
-async function fillForm(lead) {
-  if (state.isProcessing) {
-    throw new Error('Already processing a form');
-  }
-
-  state.isProcessing = true;
-  state.currentLead = lead;
-
-  try {
-    sendMessage('info', `Starting automation for: ${lead.givenName} ${lead.lastName}`);
-
-    // Step 1: Navigate to Key Opportunities
-    await navigateToKeyOpportunities();
-
-    // Step 2: Filter by assignee (Audrey)
-    await filterByAssignee(CRM_CONFIG.defaultAssignee);
-
-    // Step 3: Open new contact form
-    await openNewContactForm();
-
-    // Step 4: Wait for form to be ready
-    await waitForFormReady();
-
-    // Step 5: Fill all form fields
-    await fillContactForm(lead);
-
-    // Step 6: Save the form
-    await saveForm();
-
-    sendMessage('success', `Successfully processed: ${lead.givenName} ${lead.lastName}`);
-    return { success: true, lead };
-  } catch (error) {
-    sendMessage('error', `Failed to process lead: ${error.message}`);
-    throw error;
-  } finally {
-    state.isProcessing = false;
-    state.currentLead = null;
-  }
-}
-
-// ============================================================================
-// NAVIGATION FUNCTIONS
-// ============================================================================
-
-/**
- * Navigate to the Key Opportunities section
- */
-async function navigateToKeyOpportunities() {
-  sendMessage('info', 'Navigating to Key Opportunities...');
-
-  // First, try to find and click Inquiries link
-  const inquiriesLink = await findElement(SELECTORS.inquiriesSection, { textContent: ['Inquiries', 'Enquiries', 'Opportunities'] });
-  if (inquiriesLink && !window.location.href.includes('enquiriesSummary')) {
-    await clickElement(inquiriesLink);
-    await delay(CRM_CONFIG.timeouts.pageLoad);
-  }
-
-  // Toggle Key Opportunities switch
-  const keyOppToggle = await findElement(SELECTORS.keyOpportunitiesToggle);
-  if (keyOppToggle) {
-    const needsToggle = !keyOppToggle.checked;
-    if (needsToggle) {
-      await clickElement(keyOppToggle);
-      await delay(CRM_CONFIG.delays.afterClick);
+function selectMUIAutocompleteBySelector(inputSelector, substrings, callback) {
+  return new Promise((resolve, reject) => {
+    // Step 0: Find input
+    const input = document.querySelector(inputSelector);
+    if (!input) {
+      reject(new Error('Input not found: ' + inputSelector));
+      return;
     }
-  }
 
-  // Uncheck "My Key Opportunities" if checked
-  const myKeyOppCheckbox = document.querySelector('.ui.checked.checkbox input');
-  if (myKeyOppCheckbox && myKeyOppCheckbox.checked) {
-    await clickElement(myKeyOppCheckbox);
-    await delay(CRM_CONFIG.delays.afterClick);
-  }
-
-  // Click Apply Search button
-  const applyButton = await findApplyButton();
-  if (applyButton) {
-    await clickElement(applyButton);
-    await delay(CRM_CONFIG.timeouts.pageLoad);
-  }
-
-  sendMessage('success', 'Navigated to Key Opportunities');
-}
-
-/**
- * Filter records by assigned user
- */
-async function filterByAssignee(assignee) {
-  sendMessage('info', `Filtering by ${assignee}...`);
-
-  // Look for and click filter button
-  const filterButton = await findFilterButton();
-  if (filterButton) {
-    await clickElement(filterButton);
-    await delay(CRM_CONFIG.delays.afterClick);
-  }
-
-  // Find and populate the Assigned To field
-  const assignedToInput = await findElement(SELECTORS.assignedToInput);
-  if (assignedToInput) {
-    await fillInput(assignedToInput, assignee);
-    await delay(CRM_CONFIG.timeouts.dropdown);
-
-    // Look for and click the dropdown option
-    const option = await findDropdownOption(assignee);
-    if (option) {
-      await clickElement(option);
-      await delay(CRM_CONFIG.delays.afterClick);
+    // Step 1: Find the autocomplete root container
+    const container = input.closest('.MuiAutocomplete-inputRoot');
+    if (!container) {
+      reject(new Error('Autocomplete container not found'));
+      return;
     }
-  }
 
-  // Apply the filter
-  const applyButton = await findApplyButton();
-  if (applyButton) {
-    await clickElement(applyButton);
-    await delay(CRM_CONFIG.timeouts.pageLoad);
-  }
-
-  sendMessage('success', `Filtered by ${assignee}`);
-}
-
-/**
- * Open the new contact form
- */
-async function openNewContactForm() {
-  sendMessage('info', 'Opening new contact form...');
-
-  const createButton = await findCreateButton();
-  if (!createButton) {
-    throw new Error('Could not find create contact button');
-  }
-
-  await clickElement(createButton);
-  await delay(CRM_CONFIG.timeouts.pageLoad);
-
-  sendMessage('success', 'New contact form opened');
-}
-
-// ============================================================================
-// FORM FILLING FUNCTIONS
-// ============================================================================
-
-/**
- * Wait for the contact form to be ready
- */
-async function waitForFormReady() {
-  await findElement(SELECTORS.givenName, { timeout: CRM_CONFIG.timeouts.elementLoad });
-  await delay(CRM_CONFIG.delays.afterClick);
-}
-
-/**
- * Fill all contact form fields
- */
-async function fillContactForm(lead) {
-  sendMessage('info', `Filling form for: ${lead.givenName} ${lead.lastName}`);
-
-  // Personal Information
-  await fillField(SELECTORS.title, lead.title);
-  await fillField(SELECTORS.givenName, lead.givenName);
-  await fillField(SELECTORS.lastName, lead.lastName);
-  await fillField(SELECTORS.email, lead.email);
-  await fillField(SELECTORS.telephone, lead.telephone);
-  await fillField(SELECTORS.mobile, lead.mobile);
-
-  // Organization Details
-  await fillField(SELECTORS.organizationName, lead.organizationName);
-  await fillField(SELECTORS.position, lead.position);
-
-  // Dropdown Fields
-  await selectOption(SELECTORS.source, CRM_CONFIG.defaultSource);
-  await selectOption(SELECTORS.areaOfLaw, CRM_CONFIG.defaultAreaOfLaw);
-  await fillField(SELECTORS.sourceNotes, lead.sourceNotes);
-  await selectOption(SELECTORS.assignedTo, CRM_CONFIG.defaultAssignee);
-
-  // Follow Up Date
-  const followUpDate = lead.followUpDue || formatDate(new Date());
-  await fillField(SELECTORS.followUpDue, followUpDate);
-
-  sendMessage('info', 'All fields filled');
-}
-
-/**
- * Save the form
- */
-async function saveForm() {
-  sendMessage('info', 'Saving form...');
-
-  const saveButton = await findSaveButton();
-  if (!saveButton) {
-    throw new Error('Could not find save button');
-  }
-
-  await clickElement(saveButton);
-  await delay(CRM_CONFIG.timeouts.formSubmit);
-
-  // Look for and click close button if present
-  const closeButton = await findElement(SELECTORS.closeButton);
-  if (closeButton) {
-    await clickElement(closeButton);
-    await delay(CRM_CONFIG.delays.afterClick);
-  }
-
-  sendMessage('success', 'Form saved successfully');
-}
-
-// ============================================================================
-// FIELD FILLING HELPERS
-// ============================================================================
-
-/**
- * Fill a single form field
- */
-async function fillField(selectors, value) {
-  if (!value) return;
-
-  const element = await findElement(selectors);
-  if (!element) {
-    console.warn(`[JB Solicitors CRM] Field not found, skipping:`, selectors);
-    return;
-  }
-
-  highlightElement(element);
-
-  if (element.tagName === 'TEXTAREA') {
-    await fillTextarea(element, value);
-  } else if (element.tagName === 'SELECT') {
-    await selectSelectOption(element, value);
-  } else {
-    await fillInput(element, value);
-  }
-
-  await delay(CRM_CONFIG.delays.betweenFields);
-}
-
-/**
- * Fill an input field
- */
-async function fillInput(element, value) {
-  element.focus();
-  element.click();
-
-  // Clear existing value
-  element.value = '';
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-
-  // Set new value
-  element.value = value;
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-  element.dispatchEvent(new Event('change', { bubbles: true }));
-
-  element.blur();
-  await delay(CRM_CONFIG.delays.afterInput);
-}
-
-/**
- * Fill a textarea
- */
-async function fillTextarea(element, value) {
-  element.focus();
-  element.click();
-
-  element.value = '';
-  element.textContent = '';
-  element.value = value;
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-  element.dispatchEvent(new Event('change', { bubbles: true }));
-
-  element.blur();
-  await delay(CRM_CONFIG.delays.afterInput);
-}
-
-/**
- * Select an option from a dropdown
- */
-async function selectOption(selectors, value) {
-  const element = await findElement(selectors);
-  if (!element) {
-    console.warn(`[JB Solicitors CRM] Dropdown not found:`, selectors);
-    return;
-  }
-
-  highlightElement(element);
-
-  if (element.tagName === 'SELECT') {
-    await selectSelectOption(element, value);
-  } else {
-    // Material UI or custom dropdown
-    await clickElement(element);
-    await delay(CRM_CONFIG.delays.afterClick);
-
-    const option = await findDropdownOption(value);
-    if (option) {
-      await clickElement(option);
+    // Step 2: Click popup indicator (arrow)
+    const popupButton = container.querySelector('.MuiAutocomplete-popupIndicator');
+    if (!popupButton) {
+      reject(new Error('Popup indicator not found'));
+      return;
     }
-  }
+    popupButton.click();
 
-  await delay(CRM_CONFIG.delays.afterInput);
+    // Step 3: Focus and type (triggers fetch/filter)
+    input.focus();
+    input.value = substrings[0] || '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Step 4: Observe dropdown options
+    const observer = new MutationObserver(() => {
+      const options = [...document.querySelectorAll('li[role="option"]')];
+
+      const match = options.find(opt =>
+        substrings.some(sub => opt.textContent.includes(sub))
+      );
+
+      if (match) {
+        match.click();          // updates React state
+        observer.disconnect();  // stop observing
+        console.log('Selected option containing: ' + substrings.join(' or '));
+        if (callback) callback(match);
+        resolve(match);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error('Timeout waiting for dropdown options'));
+    }, 5000);
+  });
 }
 
 /**
- * Select option from native select element
+ * Sets value in a React / MUI controlled text input using a selector
+ * @param {string} selector - CSS selector for the input
+ * @param {string} value - Text to insert
  */
-async function selectSelectOption(selectElement, value) {
-  // Try exact match first
-  let option = Array.from(selectElement.options).find(opt => opt.value === value || opt.textContent === value);
-
-  // Try partial match
-  if (!option) {
-    option = Array.from(selectElement.options).find(opt =>
-      opt.value.toLowerCase().includes(value.toLowerCase()) ||
-      opt.textContent.toLowerCase().includes(value.toLowerCase())
-    );
+function setMUITextBySelector(selector, value) {
+  const input = document.querySelector(selector);
+  if (!input) {
+    throw new Error('Input not found: ' + selector);
   }
 
-  if (option) {
-    selectElement.value = option.value;
-    selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-  } else {
-    console.warn(`[JB Solicitors CRM] Option not found: ${value}`);
-  }
+  input.focus();
+
+  // Use native setter so React detects the change
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value'
+  ).set;
+
+  setter.call(input, value);
+
+  // Fire events React actually listens to
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+
+  console.log('Set input (' + selector + ') -> "' + value + '"');
 }
 
-// ============================================================================
-// ELEMENT FINDING FUNCTIONS
-// ============================================================================
-
 /**
- * Find an element using multiple selector strategies
+ * Wait for an element to appear in the DOM
+ * @param {string} selector - CSS selector
+ * @param {number} timeout - Maximum time to wait in ms
+ * @returns {Promise<Element>} The found element
  */
-async function findElement(selectors, options = {}) {
-  const { timeout = CRM_CONFIG.timeouts.elementLoad, textContent = null } = options;
-
-  // Try each selector
-  for (const selector of selectors) {
-    const element = await waitForSelector(selector, timeout, textContent);
+function waitForElement(selector, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector(selector);
     if (element) {
-      return element;
+      resolve(element);
+      return;
     }
-  }
 
-  return null;
+    const observer = new MutationObserver(() => {
+      const element = document.querySelector(selector);
+      if (element) {
+        observer.disconnect();
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error('Element not found: ' + selector));
+    }, timeout);
+  });
 }
 
 /**
- * Wait for a selector to match an element
+ * Wait for search results to load (checks for role="row" in results container)
+ * @returns {Promise<void>}
  */
-async function waitForSelector(selector, timeout, textContent = null) {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < timeout) {
-    const elements = document.querySelectorAll(selector);
-
-    for (const element of elements) {
-      if (textContent) {
-        const elementText = element.textContent || '';
-        const matches = textContent.some(text =>
-          elementText.toLowerCase().includes(text.toLowerCase())
-        );
-        if (!matches) continue;
-      }
-
-      // Check if element is visible
-      if (isElementVisible(element)) {
-        return element;
-      }
-    }
-
-    await delay(100);
-  }
-
-  return null;
-}
-
-/**
- * Find and wait for a dropdown option
- */
-async function findDropdownOption(value) {
-  const startTime = Date.now();
-  const timeout = CRM_CONFIG.timeouts.dropdown;
-
-  while (Date.now() - startTime < timeout) {
-    // Look in various dropdown containers
-    const optionSelectors = [
-      `li[role="option"]`,
-      `.MuiMenuItem-root`,
-      `[role="option"]`,
-      `.option`,
-      `li`
-    ];
-
-    for (const selector of optionSelectors) {
-      const options = document.querySelectorAll(selector);
-      for (const option of options) {
-        if (option.textContent.includes(value) && isElementVisible(option)) {
-          return option;
+function waitForSearchResults() {
+  return new Promise((resolve, reject) => {
+    const checkInterval = setInterval(() => {
+      const containers = document.querySelectorAll('.hideGroupPanel [ref="eCenterContainer"]');
+      for (const container of containers) {
+        if (container.querySelector('[role="row"]')) {
+          clearInterval(checkInterval);
+          console.log('Search results loaded');
+          resolve();
+          return;
         }
       }
-    }
+    }, 200);
 
-    await delay(50);
-  }
-
-  return null;
-}
-
-/**
- * Find the Apply Search button
- */
-async function findApplyButton() {
-  const buttons = document.querySelectorAll('button, [role="button"]');
-  for (const button of buttons) {
-    const text = button.textContent || '';
-    if (text.includes('Apply Search') || text.includes('Apply')) {
-      return button;
-    }
-  }
-  return null;
-}
-
-/**
- * Find the filter/menu button
- */
-async function findFilterButton() {
-  const buttons = document.querySelectorAll('button, [role="button"]');
-  for (const button of buttons) {
-    // Check for menu icon (three lines)
-    const svg = button.querySelector('svg');
-    if (svg) {
-      const paths = svg.querySelectorAll('path');
-      for (const path of paths) {
-        const d = path.getAttribute('d') || '';
-        // Check for menu icon path patterns
-        if (d.includes('M3 18h18v2H3V0z') || d.includes('M3 6h18v2H3V0z') || d.startsWith('M3 ')) {
-          return button;
-        }
-      }
-    }
-
-    // Check aria-label
-    const label = button.getAttribute('aria-label') || '';
-    if (label.includes('filter') || label.includes('menu') || label.includes('Filter') || label.includes('Menu')) {
-      return button;
-    }
-  }
-  return null;
-}
-
-/**
- * Find the create contact button
- */
-async function findCreateButton() {
-  const buttons = document.querySelectorAll('button, [role="button"]');
-  for (const button of buttons) {
-    const text = button.textContent || '';
-    const ariaLabel = button.getAttribute('aria-label') || '';
-    const dataTestId = button.getAttribute('data-testid') || '';
-
-    if (
-      text.includes('+') ||
-      text.includes('Create') ||
-      text.includes('New') ||
-      text.includes('Add') ||
-      ariaLabel.includes('create') ||
-      ariaLabel.includes('add') ||
-      dataTestId.includes('create') ||
-      dataTestId.includes('add')
-    ) {
-      return button;
-    }
-  }
-  return null;
-}
-
-/**
- * Find the save button
- */
-async function findSaveButton() {
-  const buttons = document.querySelectorAll('button, [role="button"], [type="submit"]');
-  for (const button of buttons) {
-    const text = button.textContent || '';
-    const ariaLabel = button.getAttribute('aria-label') || '';
-    const type = button.getAttribute('type') || '';
-
-    if (
-      text.includes('Save') ||
-      text.includes('Submit') ||
-      ariaLabel.includes('save') ||
-      type === 'submit'
-    ) {
-      return button;
-    }
-  }
-  return null;
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Check if element is visible
- */
-function isElementVisible(element) {
-  if (!element) return false;
-
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.opacity !== '0'
-  );
-}
-
-/**
- * Click an element
- */
-async function clickElement(element) {
-  highlightElement(element);
-
-  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  await delay(CRM_CONFIG.delays.afterClick);
-
-  element.click();
-}
-
-/**
- * Highlight an element visually
- */
-function highlightElement(element) {
-  element.classList.add('jb-crm-highlight');
-  setTimeout(() => {
-    element.classList.remove('jb-crm-highlight');
-  }, 500);
-}
-
-/**
- * Format date for input
- */
-function formatDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      reject(new Error('Search results did not load in time'));
+    }, 30000);
+  });
 }
 
 /**
  * Delay helper
+ * @param {number} ms - Milliseconds to delay
  */
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -862,9 +257,312 @@ function sendMessage(level, message) {
     level,
     message
   }).catch(() => {
-    // Background not available, log to console
-    console.log(`[JB Solicitors CRM] [${level.toUpperCase()}] ${message}`);
+    console.log('[JB Solicitors CRM] [' + level.toUpperCase() + '] ' + message);
   });
+}
+
+// ============================================================================
+// MAIN WORKFLOW FUNCTIONS
+// ============================================================================
+
+/**
+ * Initialize CRM: Close sidebar, navigate to key opportunities, set up filters
+ * This is called once at the beginning of automation
+ */
+async function initializeCrm() {
+  sendMessage('info', 'Setting up filters...');
+
+  // Step 0: Close sidebar if open
+  const closeBtn = document.querySelector('.x');
+  if (closeBtn) {
+    closeBtn.click();
+    await delay(500);
+  }
+
+  // Step 1: Toggle Key Opportunities
+  const switchRoot = document.querySelector('.MuiSwitch-root');
+  if (switchRoot) {
+    switchRoot.click();
+    await delay(1000);
+
+    // Check if successfully enabled
+    const isChecked = switchRoot.classList.contains('Mui-checked');
+    sendMessage('info', isChecked ? 'Filtering active opportunities...' : 'Toggling opportunities filter...');
+  }
+
+  // Step 2: Uncheck "My Enquiries" if checked
+  await delay(500);
+  document.querySelectorAll('.ui.checkbox').forEach(function(e) {
+    const label = e.textContent.trim();
+    if (label === 'My Enquiries') {
+      const checkbox = e.querySelector('input[type="checkbox"]');
+      if (checkbox && checkbox.checked) {
+        checkbox.click();
+      }
+    }
+  });
+
+  await delay(1000);
+
+  // Step 3: Open filter menu (skip first Apply Search)
+  const filterButtons = document.querySelectorAll('button.MuiButtonBase-root.MuiIconButton-root[aria-label="Advanced Filter"]');
+  if (filterButtons.length > 0) {
+    filterButtons[0].click();
+    await delay(500);
+  }
+
+  // Step 4: Select Audrey in Assigned To dropdown
+  try {
+    await selectMUIAutocompleteBySelector('#assignedTo', ['Audrey']);
+    sendMessage('success', 'Filter set to Audrey');
+  } catch (error) {
+    sendMessage('warning', 'Could not set filter: ' + error.message);
+  }
+
+  await delay(500);
+
+  // Step 5: Click Apply Search (only once, at the end)
+  document.querySelectorAll('.MuiButton-label').forEach(function(e) {
+    const text = e.textContent.trim();
+    if (text === 'Apply Search') {
+      e.closest('button').click();
+    }
+  });
+
+  // Step 6: Wait for search results
+  await waitForSearchResults();
+  sendMessage('success', 'Ready to process leads');
+}
+
+/**
+ * Main workflow: Initialize (once), then for each lead create and fill form
+ */
+async function fillForm(lead) {
+  if (state.isProcessing) {
+    throw new Error('Already processing a form');
+  }
+
+  state.isProcessing = true;
+
+  try {
+    sendMessage('info', 'Processing: ' + lead.givenName + ' ' + lead.lastName);
+
+    // Step 1: Click "+" button to create new contact
+    const addButton = document.querySelector('[data-icon-name="Add"]');
+    if (!addButton) {
+      throw new Error('Could not find Add button');
+    }
+    addButton.click();
+    await delay(1000);
+
+    // Step 2: Wait for drawer to open
+    await waitForElement('.MuiDrawer-paper', 5000);
+    await delay(500);
+
+    // Step 3: Fill contact details
+    await fillContactDetails(lead);
+
+    // Step 4: Fill organization details
+    await fillOrganizationDetails(lead);
+
+    // Step 5: Set fixed values (Source, Area of Law)
+    await setFixedValues(lead);
+
+    // Step 6: Configure assignment
+    await configureAssignment();
+
+    // Step 7: Save and close
+    await saveAndClose();
+
+    sendMessage('success', 'Saved: ' + lead.givenName + ' ' + lead.lastName);
+    return { success: true, lead };
+  } catch (error) {
+    sendMessage('error', 'Could not save: ' + error.message);
+    throw error;
+  } finally {
+    state.isProcessing = false;
+  }
+}
+
+/**
+ * Fill contact details in the form
+ */
+async function fillContactDetails(lead) {
+  const drawerPrefix = '.MuiDrawer-paper ';
+
+  // Title (autocomplete)
+  if (lead.title) {
+    try {
+      const titleInput = document.querySelector(drawerPrefix + 'input[aria-autocomplete="list"]');
+      if (titleInput) {
+        await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', [lead.title]);
+        await delay(200);
+      }
+    } catch (e) {
+      // Silently skip if title fails
+    }
+  }
+
+  // Given Name
+  if (lead.givenName) {
+    setMUITextBySelector(drawerPrefix + 'input[name="firstName"]', lead.givenName);
+    await delay(100);
+  }
+
+  // Last Name
+  if (lead.lastName) {
+    setMUITextBySelector(drawerPrefix + 'input[name="lastName"]', lead.lastName);
+    await delay(100);
+  }
+
+  // Email
+  if (lead.email) {
+    setMUITextBySelector(drawerPrefix + 'input[name="email"]', lead.email);
+    await delay(100);
+  }
+
+  // Mobile
+  if (lead.mobile) {
+    setMUITextBySelector(drawerPrefix + 'input[name="mobile"]', lead.mobile);
+    await delay(100);
+  }
+
+  // Telephone (phone)
+  if (lead.telephone) {
+    setMUITextBySelector(drawerPrefix + 'input[name="phone"]', lead.telephone);
+    await delay(100);
+  }
+}
+
+/**
+ * Fill organization details in the form
+ */
+async function fillOrganizationDetails(lead) {
+  if (!lead.organizationName && !lead.position) {
+    return;
+  }
+
+  const drawerPrefix = '.MuiDrawer-paper ';
+
+  // Find and open Organisation accordion if closed
+  const panels = document.querySelectorAll(drawerPrefix + '.MuiExpansionPanelSummary-root');
+  for (const panel of panels) {
+    const label = panel.textContent.trim();
+    if (label.includes('Organisation') || label.includes('Organization')) {
+      if (panel.getAttribute('aria-expanded') === 'false') {
+        panel.click();
+        await delay(300);
+      }
+      break;
+    }
+  }
+
+  // Organization Name
+  if (lead.organizationName) {
+    setMUITextBySelector(drawerPrefix + 'input[name="organisation"]', lead.organizationName);
+    await delay(100);
+  }
+
+  // Position Title
+  if (lead.position) {
+    setMUITextBySelector(drawerPrefix + 'input[name="positionAtOrganisation"]', lead.position);
+    await delay(100);
+  }
+}
+
+/**
+ * Set fixed values (Source, Area of Law, Source Notes)
+ */
+async function setFixedValues(lead) {
+  const drawerPrefix = '.MuiDrawer-paper ';
+
+  // Source = "Other" (autocomplete)
+  try {
+    const sourceInputs = document.querySelectorAll(drawerPrefix + 'input[aria-autocomplete="list"]');
+    for (const input of sourceInputs) {
+      const ariaDescribedBy = input.getAttribute('aria-describedby') || '';
+      if (ariaDescribedBy.includes('autocomplete')) {
+        const label = input.closest('.MuiFormControl-root')?.querySelector('label');
+        if (label && label.textContent.includes('Source')) {
+          await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', ['Other']);
+          await delay(200);
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    // Silently skip
+  }
+
+  // Area of Law = "Advice" (autocomplete)
+  try {
+    const areaInputs = document.querySelectorAll(drawerPrefix + 'input[aria-autocomplete="list"]');
+    for (const input of areaInputs) {
+      const ariaDescribedBy = input.getAttribute('aria-describedby') || '';
+      if (ariaDescribedBy.includes('autocomplete')) {
+        const label = input.closest('.MuiFormControl-root')?.querySelector('label');
+        if (label && label.textContent.includes('Area')) {
+          await selectMUIAutocompleteBySelector(drawerPrefix + 'input[aria-autocomplete="list"]', ['Advice']);
+          await delay(200);
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    // Silently skip
+  }
+
+  // Source Notes (from sheet)
+  if (lead.sourceNotes) {
+    const labels = document.querySelectorAll(drawerPrefix + 'label');
+    for (const label of labels) {
+      if (label.textContent.includes('Source Notes')) {
+        const input = label.closest('.MuiFormControl-root')?.querySelector('input, textarea');
+        if (input) {
+          setMUITextBySelector(drawerPrefix + 'input, textarea', lead.sourceNotes);
+          await delay(100);
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Configure assignment (Assigned To = Audrey)
+ */
+async function configureAssignment() {
+  const drawerPrefix = '.MuiDrawer-paper ';
+
+  // Assigned To = Audrey (always)
+  try {
+    // Find the input with name="assignedTo" inside the drawer
+    const assignedToInput = document.querySelector(drawerPrefix + '[name="assignedTo"]');
+    if (assignedToInput) {
+      // Use the ID directly if it has one, otherwise use the name selector with drawer prefix
+      const inputId = assignedToInput.id ? '#' + assignedToInput.id : drawerPrefix + '[name="assignedTo"]';
+      await selectMUIAutocompleteBySelector(inputId, ['Audrey']);
+      await delay(200);
+    }
+  } catch (e) {
+    // Silently skip
+  }
+}
+
+/**
+ * Save the form and close it
+ */
+async function saveAndClose() {
+  const drawerPrefix = '.MuiDrawer-paper ';
+
+  // Click Save and Close button
+  const saveButton = document.querySelector(drawerPrefix + 'button[type="submit"]');
+  if (!saveButton) {
+    throw new Error('Could not find Save button');
+  }
+
+  saveButton.click();
+  await delay(2000);
 }
 
 // ============================================================================
@@ -930,18 +628,6 @@ function injectStyles() {
         opacity: 1;
         transform: translateY(0);
       }
-    }
-
-    /* Success indicator */
-    .jb-crm-success::after {
-      content: 'Saved successfully!';
-      background: #34a853;
-    }
-
-    /* Error indicator */
-    .jb-crm-error::after {
-      content: 'Error occurred';
-      background: #ea4335;
     }
   `;
 

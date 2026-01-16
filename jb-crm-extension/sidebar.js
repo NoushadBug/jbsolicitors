@@ -38,6 +38,8 @@ const elements = {
   pendingCount: document.getElementById('pendingCount'),
   fetchLeadsBtn: document.getElementById('fetchLeadsBtn'),
   startAutomationBtn: document.getElementById('startAutomationBtn'),
+  pauseAutomationBtn: document.getElementById('pauseAutomationBtn'),
+  resetAutomationBtn: document.getElementById('resetAutomationBtn'),
   progressSection: document.getElementById('progressSection'),
   progressFill: document.getElementById('progressFill'),
   progressText: document.getElementById('progressText'),
@@ -104,6 +106,8 @@ function setupEventListeners() {
   // Main sidebar
   elements.fetchLeadsBtn.addEventListener('click', fetchLeads);
   elements.startAutomationBtn.addEventListener('click', startAutomation);
+  elements.pauseAutomationBtn.addEventListener('click', pauseAutomation);
+  elements.resetAutomationBtn.addEventListener('click', resetAutomation);
   elements.clearLogBtn.addEventListener('click', clearLogs);
   elements.settingsBtn.addEventListener('click', openSettingsModal);
 
@@ -146,6 +150,11 @@ function handleMessage(message, sender, sendResponse) {
     updateProgress(message.current, message.total, message.lead);
   } else if (message.type === 'COMPLETE') {
     automationComplete(message.success, message.error);
+  } else if (message.type === 'AUTOMATION_STARTED') {
+    showAutomationControls(true);
+    addLog('info', 'Setting up the CRM...');
+  } else if (message.type === 'AUTOMATION_STOPPED' || message.type === 'AUTOMATION_COMPLETE') {
+    showAutomationControls(false);
   }
   return true;
 }
@@ -348,7 +357,7 @@ async function checkConfig() {
   const config = await chrome.storage.sync.get({ apiUrl: '' });
 
   if (!config.apiUrl) {
-    addLog('warning', 'Please configure the API URL in Settings');
+    addLog('warning', 'Please enter the Spreadsheet URL in Settings');
     updateConnectionStatus('error');
     return false;
   }
@@ -401,14 +410,14 @@ async function loadCachedLeads() {
     elements.pendingCount.textContent = currentLeads.length;
     elements.startAutomationBtn.disabled = false;
 
-    const cacheAge = Math.floor((Date.now() - timestamp) / 1000 / 60); // minutes ago
-    addLog('info', `Loaded ${currentLeads.length} cached leads (${cacheAge} min ago)`);
+    const cacheAge = Math.floor((Date.now() - timestamp) / 1000 / 60);
+    addLog('info', `Found ${currentLeads.length} leads from ${cacheAge} min ago`);
   }
 }
 
 async function fetchLeads() {
   elements.fetchLeadsBtn.disabled = true;
-  addLog('info', 'Fetching fresh leads...');
+  addLog('info', 'Getting leads from spreadsheet...');
 
   try {
     const config = await chrome.storage.sync.get({ apiUrl: '' });
@@ -429,17 +438,17 @@ async function fetchLeads() {
       });
 
       if (currentLeads.length > 0) {
-        addLog('success', `Found ${currentLeads.length} leads`);
+        addLog('success', `${currentLeads.length} leads ready to process`);
         elements.startAutomationBtn.disabled = false;
       } else {
-        addLog('info', 'No leads found');
+        addLog('info', 'No new leads to process');
         elements.startAutomationBtn.disabled = true;
       }
     } else {
       throw new Error(data.error || 'Failed to fetch');
     }
   } catch (error) {
-    addLog('error', `Failed: ${error.message}`);
+    addLog('error', `Could not get leads: ${error.message}`);
   } finally {
     elements.fetchLeadsBtn.disabled = false;
   }
@@ -457,7 +466,7 @@ async function startAutomation() {
   elements.startAutomationBtn.disabled = true;
   elements.fetchLeadsBtn.disabled = true;
 
-  addLog('info', `Starting automation (${currentLeads.length} leads)`);
+  addLog('info', `Starting to process ${currentLeads.length} leads...`);
 
   chrome.runtime.sendMessage({
     type: 'START_AUTOMATION',
@@ -485,7 +494,7 @@ function automationComplete(success, error) {
   elements.fetchLeadsBtn.disabled = false;
 
   if (success) {
-    addLog('success', `Complete! Processed ${currentLeads.length} leads`);
+    addLog('success', `Done! Processed all ${currentLeads.length} leads`);
     elements.currentLead.textContent = 'Complete!';
 
     // Clear cached leads after successful automation
@@ -494,11 +503,75 @@ function automationComplete(success, error) {
     elements.pendingCount.textContent = '-';
     elements.startAutomationBtn.disabled = true;
   } else {
-    addLog('error', `Failed: ${error}`);
-    elements.currentLead.textContent = 'Failed';
+    addLog('error', `Stopped: ${error}`);
+    elements.currentLead.textContent = 'Stopped';
   }
 
   setTimeout(() => checkConnection(), 2000);
+}
+
+function showAutomationControls(isActive) {
+  if (isActive) {
+    elements.startAutomationBtn.style.display = 'none';
+    elements.pauseAutomationBtn.style.display = 'inline-flex';
+    elements.resetAutomationBtn.style.display = 'inline-flex';
+  } else {
+    elements.startAutomationBtn.style.display = 'inline-flex';
+    elements.pauseAutomationBtn.style.display = 'none';
+    elements.resetAutomationBtn.style.display = 'none';
+  }
+}
+
+function pauseAutomation() {
+  chrome.runtime.sendMessage({
+    type: 'PAUSE_AUTOMATION'
+  }, (response) => {
+    if (response && response.success) {
+      addLog('info', 'Paused - click Resume to continue');
+      elements.pauseAutomationBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Resume
+      `;
+      elements.pauseAutomationBtn.onclick = resumeAutomation;
+    }
+  });
+}
+
+function resumeAutomation() {
+  chrome.runtime.sendMessage({
+    type: 'RESUME_AUTOMATION'
+  }, (response) => {
+    if (response && response.success) {
+      addLog('info', 'Resuming...');
+      elements.pauseAutomationBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="6" y="4" width="4" height="16"/>
+          <rect x="14" y="4" width="4" height="16"/>
+        </svg>
+        Pause
+      `;
+      elements.pauseAutomationBtn.onclick = pauseAutomation;
+    }
+  });
+}
+
+function resetAutomation() {
+  if (confirm('Are you sure you want to reset the automation? This will clear all progress.')) {
+    chrome.runtime.sendMessage({
+      type: 'RESET_AUTOMATION'
+    }, (response) => {
+      if (response && response.success) {
+        addLog('info', 'Reset - ready to start over');
+        isProcessing = false;
+        elements.progressSection.style.display = 'none';
+        elements.startAutomationBtn.disabled = false;
+        elements.fetchLeadsBtn.disabled = false;
+        showAutomationControls(false);
+      }
+    });
+  }
 }
 
 // Logging
@@ -508,7 +581,7 @@ function addLog(level, message) {
   logEntry.textContent = message;
 
   elements.logContent.appendChild(logEntry);
-  elements.logContent.scrollTop = elements.logContent.scrollHeight;
+  elements.logContent.scrollTop = 0; // Scroll to top (which is newest in column-reverse)
 
   saveLog(level, message);
 }
@@ -527,14 +600,16 @@ function saveLog(level, message) {
 function loadLogs() {
   chrome.storage.local.get({ logs: [] }, (result) => {
     const logs = result.logs || [];
-    logs.forEach(log => {
+    // Add in reverse order (newest first) since we're using column-reverse
+    logs.slice().reverse().forEach(log => {
       const logEntry = document.createElement('div');
       logEntry.className = `log-entry ${log.level}`;
       logEntry.textContent = log.message;
       elements.logContent.appendChild(logEntry);
     });
 
-    elements.logContent.scrollTop = elements.logContent.scrollHeight;
+    // Scroll to bottom (which is actually top in column-reverse)
+    elements.logContent.scrollTop = 0;
   });
 }
 

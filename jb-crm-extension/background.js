@@ -42,6 +42,10 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(consol
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[JB CRM] Extension installed/updated');
 
+  // Clear any stale state from previous installations
+  await chrome.storage.local.clear();
+  console.log('[JB CRM] Cleared all local storage');
+
   // Enable side panel toggle
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
@@ -66,19 +70,15 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[JB CRM] Extension started');
 
+  // Clear stale state on browser startup
+  await chrome.storage.local.clear();
+  console.log('[JB CRM] Cleared stale state on startup');
+
   // Ensure side panel toggle is enabled
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
   // Load config
   await loadConfig();
-
-  // Check for incomplete automation and restore
-  const state = await getState();
-  if (state.isProcessing && state.currentLeadIndex < state.totalLeads) {
-    console.log('[JB CRM] Restoring incomplete automation');
-    // Resume from where we left off
-    await scheduleNextLead();
-  }
 });
 
 // ============================================================================
@@ -178,6 +178,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       handleStopAutomation(sendResponse);
       return true;
 
+    case 'PAUSE_AUTOMATION':
+      handlePauseAutomation(sendResponse);
+      return true;
+
+    case 'RESUME_AUTOMATION':
+      handleResumeAutomation(sendResponse);
+      return true;
+
+    case 'RESET_AUTOMATION':
+      handleResetAutomation(sendResponse);
+      return true;
+
     case 'GET_STATE':
       getState().then(state => sendResponse({ state }));
       return true;
@@ -215,9 +227,35 @@ async function handleStartAutomation(leads, sendResponse) {
   try {
     const state = await getState();
 
+    // Check if there's stale state from a previous session
     if (state.isProcessing) {
-      sendResponse({ success: false, error: 'Automation already in progress' });
-      return;
+      // Verify the CRM tab still exists
+      let crmTabExists = false;
+      if (state.crmTabId) {
+        try {
+          await chrome.tabs.get(state.crmTabId);
+          crmTabExists = true;
+        } catch (e) {
+          // Tab doesn't exist, clear the stale state
+          crmTabExists = false;
+        }
+      }
+
+      // If CRM tab doesn't exist or state is old (> 1 hour), clear it
+      const stateAge = Date.now() - (state.lastActivityTime || 0);
+      const isStale = stateAge > 3600000; // 1 hour
+
+      if (!crmTabExists || isStale) {
+        console.log('[JB CRM] Clearing stale automation state');
+        await setState({
+          isProcessing: false,
+          currentLeadIndex: 0,
+          totalLeads: 0
+        });
+      } else {
+        sendResponse({ success: false, error: 'Automation already in progress' });
+        return;
+      }
     }
 
     if (!leads || leads.length === 0) {
@@ -252,7 +290,10 @@ async function handleStartAutomation(leads, sendResponse) {
     log('info', `Starting automation for ${leads.length} leads`);
     broadcastToSidebar({ type: 'AUTOMATION_STARTED', totalLeads: leads.length });
 
-    // Start processing
+    // Initialize CRM first (navigate to key opportunities, set filters)
+    await initializeCrmTab(crmTab.id);
+
+    // Start processing leads
     await scheduleNextLead();
 
     sendResponse({ success: true });
@@ -264,6 +305,68 @@ async function handleStartAutomation(leads, sendResponse) {
 
 async function handleStopAutomation(sendResponse) {
   await stopAutomation('Stopped by user');
+  sendResponse({ success: true });
+}
+
+async function handlePauseAutomation(sendResponse) {
+  const state = await getState();
+
+  if (!state.isProcessing) {
+    sendResponse({ success: false, error: 'No automation in progress' });
+    return;
+  }
+
+  // Clear alarms to pause processing
+  await chrome.alarms.clear(ALARM_NAMES.PROCESS_NEXT_LEAD);
+
+  // Update state to indicate paused
+  await setState({ isPaused: true });
+
+  log('info', 'Automation paused');
+  sendResponse({ success: true });
+}
+
+async function handleResumeAutomation(sendResponse) {
+  const state = await getState();
+
+  if (!state.isProcessing || !state.isPaused) {
+    sendResponse({ success: false, error: 'No paused automation to resume' });
+    return;
+  }
+
+  // Update state to indicate not paused
+  await setState({ isPaused: false });
+
+  // Resume processing
+  await scheduleNextLead();
+
+  log('info', 'Automation resumed');
+  sendResponse({ success: true });
+}
+
+async function handleResetAutomation(sendResponse) {
+  // Clear all alarms
+  await chrome.alarms.clear(ALARM_NAMES.PROCESS_NEXT_LEAD);
+  await chrome.alarms.clear(ALARM_NAMES.KEEP_ALIVE);
+
+  // Reset state completely
+  await setState({
+    isProcessing: false,
+    isPaused: false,
+    currentLeadIndex: 0,
+    totalLeads: 0,
+    processedCount: 0,
+    failedCount: 0,
+    startTime: null,
+    lastActivityTime: null
+  });
+
+  // Clear leads from storage
+  await setLeads([]);
+
+  log('info', 'Automation reset');
+  broadcastToSidebar({ type: 'AUTOMATION_STOPPED', reason: 'Reset by user' });
+
   sendResponse({ success: true });
 }
 
@@ -311,7 +414,7 @@ async function processNextLead() {
   const leads = await getLeads();
   const config = await getConfig();
 
-  if (!state.isProcessing) {
+  if (!state.isProcessing || state.isPaused) {
     await cleanupKeepAlive();
     return;
   }
@@ -514,13 +617,17 @@ async function getOrCreateCrmTab() {
   const tabs = await chrome.tabs.query({ url: `${CRM_CONFIG.url}/*` });
 
   if (tabs.length > 0) {
-    // Found existing CRM tab
+    // Found existing CRM tab - reload it for fresh state
     const crmTab = tabs.find(tab => tab.url.includes(CRM_CONFIG.path)) || tabs[0];
+
+    // Reload the tab to get a fresh state
+    await chrome.tabs.reload(crmTab.id);
+    await delay(3000);
 
     // Make sure it's on the correct path
     if (!crmTab.url.includes(CRM_CONFIG.path)) {
       await chrome.tabs.update(crmTab.id, { url: crmUrl });
-      await delay(1000);
+      await delay(3000);
     }
 
     return crmTab;
@@ -533,8 +640,8 @@ async function getOrCreateCrmTab() {
       active: true
     });
 
-    // Wait for tab to load
-    await delay(2000);
+    // Wait for tab to load (3 seconds as per requirements)
+    await delay(3000);
 
     return newTab;
   } catch (error) {
@@ -553,6 +660,42 @@ async function switchToCrmTab() {
     await chrome.windows.update(crmTab.windowId, { focused: true });
   }
   return crmTab;
+}
+
+/**
+ * Initialize CRM tab: Close sidebar, navigate to key opportunities, set filters
+ * This is called once before processing any leads
+ */
+async function initializeCrmTab(tabId) {
+  return new Promise((resolve, reject) => {
+    let completed = false;
+
+    chrome.tabs.sendMessage(tabId, {
+      type: 'INITIALIZE_CRM'
+    }, (response) => {
+      if (completed) return;
+      completed = true;
+
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      if (response && response.success) {
+        log('info', 'CRM initialized successfully');
+        resolve(response);
+      } else {
+        reject(new Error(response?.error || 'Failed to initialize CRM'));
+      }
+    });
+
+    // Timeout after 60 seconds (initialization can take longer)
+    setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      reject(new Error('Timeout: CRM initialization took too long (60s)'));
+    }, 60000);
+  });
 }
 
 // ============================================================================
