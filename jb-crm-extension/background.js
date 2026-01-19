@@ -133,7 +133,7 @@ function createInitialState() {
 
 function createDefaultConfig() {
   return {
-    apiUrl: '',
+    apiUrl: 'https://script.google.com/macros/s/AKfycby5S72to10gh4cDgm5T0mwQUSDj6wWJMYjF6qvBF50y2gsRnlP8VtHD45nHNuUem9CgFw/exec',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3
@@ -286,6 +286,10 @@ async function handleStartAutomation(leads, sendResponse) {
     }
 
     await setState({ crmTabId: crmTab.id });
+
+    // Make the CRM tab active (bring it to front)
+    await chrome.tabs.update(crmTab.id, { active: true });
+    await chrome.windows.update(crmTab.windowId, { focused: true });
 
     log('info', `Starting automation for ${leads.length} leads`);
     broadcastToSidebar({ type: 'AUTOMATION_STARTED', totalLeads: leads.length });

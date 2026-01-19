@@ -193,10 +193,11 @@ function setMUITextBySelector(selector, value) {
   input.focus();
 
   // Use native setter so React detects the change
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value'
-  ).set;
+  // Handle both input and textarea elements
+  const prototype = input.tagName === 'TEXTAREA'
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
 
   setter.call(input, value);
 
@@ -296,43 +297,54 @@ async function initializeCrm() {
   sendMessage('info', 'Setting up filters...');
 
   // Step 0: Close sidebar if open
-  const closeBtn = document.querySelector('.x');
-  if (closeBtn) {
+  try {
+    const closeBtn = await waitForElement('.x', 5000);
     closeBtn.click();
-    await delay(500);
+    await delay(300);
+  } catch (e) {
+    // Sidebar might not be open, continue
   }
 
   // Step 1: Toggle Key Opportunities
-  const switchRoot = document.querySelector('.MuiSwitch-root');
-  if (switchRoot) {
+  try {
+    const switchRoot = await waitForElement('.MuiSwitch-root', 10000);
     switchRoot.click();
-    await delay(1000);
+
+    // Wait for the toggle to complete (check for class change)
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check if successfully enabled
     const isChecked = switchRoot.classList.contains('Mui-checked');
     sendMessage('info', isChecked ? 'Filtering active opportunities...' : 'Toggling opportunities filter...');
+  } catch (error) {
+    sendMessage('warning', 'Key Opportunities switch not found: ' + error.message);
   }
 
   // Step 2: Uncheck "My Enquiries" if checked
-  await delay(500);
-  document.querySelectorAll('.ui.checkbox').forEach(function(e) {
-    const label = e.textContent.trim();
-    if (label === 'My Enquiries') {
-      const checkbox = e.querySelector('input[type="checkbox"]');
-      if (checkbox && checkbox.checked) {
-        checkbox.click();
+  try {
+    await waitForElement('.ui.checkbox', 10000);
+    document.querySelectorAll('.ui.checkbox').forEach(function(e) {
+      const label = e.textContent.trim();
+      if (label === 'My Enquiries') {
+        const checkbox = e.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.checked) {
+          checkbox.click();
+        }
       }
-    }
-  });
+    });
+    await delay(500);
+  } catch (error) {
+    sendMessage('warning', 'My Enquiries checkbox not found: ' + error.message);
+  }
 
-  await delay(1000);
-
-  // Step 3: Open filter menu (skip first Apply Search)
-  const filterButtons = document.querySelectorAll('button.MuiButtonBase-root.MuiIconButton-root[aria-label="Advanced Filter"]');
-  if (filterButtons.length > 0) {
-    filterButtons[0].click();
-    // Wait longer for filter menu to render
-    await delay(1500);
+  // Step 3: Open filter menu
+  try {
+    const filterButton = await waitForElement('button.MuiButtonBase-root.MuiIconButton-root[aria-label="Advanced Filter"]', 10000);
+    filterButton.click();
+    // Wait for filter menu to render
+    await delay(500);
+  } catch (error) {
+    sendMessage('warning', 'Filter button not found: ' + error.message);
   }
 
   // Step 4: Select Audrey in Assigned To dropdown with retry
@@ -340,25 +352,31 @@ async function initializeCrm() {
     sendMessage('info', 'Setting filter to Audrey...');
     await selectMUIAutocompleteBySelector('#assignedTo', ['Audrey'], null, 15);
     sendMessage('success', 'Filter set to Audrey');
-    await delay(1000);
+    await delay(500);
   } catch (error) {
     sendMessage('error', 'Could not set filter to Audrey: ' + error.message);
     throw error;
   }
 
   // Step 5: Click Apply Search (only once, at the end)
-  sendMessage('info', 'Applying search filters...');
-  let applyClicked = false;
-  document.querySelectorAll('.MuiButton-label').forEach(function(e) {
-    const text = e.textContent.toLowerCase().trim();
-    if (text === 'apply search' && !applyClicked) {
-      e.closest('button').click();
-      applyClicked = true;
-    }
-  });
+  try {
+    sendMessage('info', 'Applying search filters...');
+    await waitForElement('.MuiButton-label', 10000);
+    const applyButtons = document.querySelectorAll('.MuiButton-label');
+    let applyClicked = false;
+    applyButtons.forEach(function(e) {
+      const text = e.textContent.toLowerCase().trim();
+      if (text === 'apply search' && !applyClicked) {
+        e.closest('button').click();
+        applyClicked = true;
+      }
+    });
 
-  if (!applyClicked) {
-    sendMessage('warning', 'Apply Search button not found');
+    if (!applyClicked) {
+      sendMessage('warning', 'Apply Search button not found');
+    }
+  } catch (error) {
+    sendMessage('warning', 'Apply Search button not found: ' + error.message);
   }
 
   // Step 6: Wait for search results
@@ -558,9 +576,17 @@ async function setFixedValues(lead) {
     const labels = document.querySelectorAll(drawerPrefix + 'label');
     for (const label of labels) {
       if (label.textContent.includes('Source Notes')) {
-        const input = label.closest('.MuiFormControl-root')?.querySelector('input, textarea');
+        const input = label.closest('.MuiFormControl-root')?.querySelector('input[name="sourceNotes"], textarea[name="sourceNotes"]');
         if (input) {
-          setMUITextBySelector(drawerPrefix + 'input, textarea', lead.sourceNotes);
+          input.focus();
+          const prototype = input.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+          setter.call(input, lead.sourceNotes);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          console.log('[JB CRM] Set Source Notes -> "' + lead.sourceNotes + '"');
           await delay(100);
           break;
         }
@@ -570,7 +596,7 @@ async function setFixedValues(lead) {
 }
 
 /**
- * Configure assignment (Assigned To = Audrey)
+ * Configure assignment (Assigned To = Audrey, Assigned By = Audrey)
  */
 async function configureAssignment() {
   const drawerPrefix = '.MuiDrawer-paper ';
@@ -585,6 +611,18 @@ async function configureAssignment() {
   } catch (e) {
     // Silently skip
     console.log('[JB CRM] Could not set Assigned To: ' + e.message);
+  }
+
+  // Assigned By = Audrey (downshift-2-input)
+  try {
+    const assignedByInput = document.querySelector('#downshift-2-input');
+    if (assignedByInput) {
+      await selectMUIAutocompleteBySelector('#downshift-2-input', ['Audrey'], null, 15);
+      await delay(300);
+    }
+  } catch (e) {
+    // Silently skip
+    console.log('[JB CRM] Could not set Assigned By: ' + e.message);
   }
 }
 

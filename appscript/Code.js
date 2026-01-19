@@ -122,7 +122,7 @@ function getLeadAPIController(rowIndex) {
 }
 
 /**
- * Mark a lead as processed (adds a timestamp)
+ * Mark a lead as processed (adds a timestamp in column P)
  * @param {number} rowIndex - The row index (1-based, excluding header)
  * @returns {Object} Response indicating success/failure
  */
@@ -137,20 +137,19 @@ function markLeadProcessedAPIController(rowIndex) {
     return { error: 'Invalid row index' };
   }
 
-  // Check if column O exists for processed timestamp, if not add it
-  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var processedColIndex = headerRow.indexOf('Processed');
+  // Column P is the 16th column (fixed)
+  var processedColIndex = 16; // Column P
 
-  if (processedColIndex === -1) {
-    // Add the Processed column header
-    sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Processed');
-    processedColIndex = sheet.getLastColumn() - 1;
-  } else {
-    processedColIndex++;
+  // Check if P2 (second row) has the "Processed" header, if not add it
+  var p2Value = sheet.getRange(2, processedColIndex).getValue();
+  if (!p2Value || p2Value.toString().trim() === '') {
+    sheet.getRange(2, processedColIndex).setValue('Processed');
   }
 
-  // Set the processed timestamp
-  sheet.getRange(rowIndex + 1, processedColIndex + 1).setValue(new Date().toISOString());
+  // Set the processed timestamp in column P for the data row
+  // rowIndex is 1-based, data starts from row 3 (rows 1-2 are headers)
+  // So actual row is rowIndex + 2
+  sheet.getRange(rowIndex + 2, processedColIndex).setValue(new Date().toISOString());
 
   return {
     success: true,
@@ -159,7 +158,7 @@ function markLeadProcessedAPIController(rowIndex) {
 }
 
 /**
- * Get all unprocessed leads (no timestamp in Processed column)
+ * Get all unprocessed leads (no timestamp in column P)
  * @returns {Object} Response with unprocessed leads
  */
 function getUnprocessedLeadsAPIController() {
@@ -169,9 +168,6 @@ function getUnprocessedLeadsAPIController() {
   }
 
   var data = sheet.getDataRange().getValues();
-  var headerRow = data[0];
-  var processedColIndex = headerRow.indexOf('Processed');
-
   var leads = [];
 
   // Skip first TWO rows (indices 0 and 1) - they contain column headers
@@ -179,8 +175,9 @@ function getUnprocessedLeadsAPIController() {
   for (var i = 2; i < data.length; i++) {
     var isProcessed = false;
 
-    // Check if Processed column exists and has a value
-    if (processedColIndex !== -1 && processedColIndex < data[i].length) {
+    // Check column P (index 15, 16th column) for timestamp
+    var processedColIndex = 15; // 0-based index for column P
+    if (processedColIndex < data[i].length) {
       var processedValue = data[i][processedColIndex];
       if (processedValue && processedValue !== '') {
         isProcessed = true;
@@ -308,15 +305,12 @@ function parseLeadsFromData(data) {
  * @returns {Object} Parsed lead object
  */
 function parseLeadFromRow(row, rowIndex) {
-  // Only include email if it has a value (not N/A or empty)
   var email = safeGet(row, 3);
-  if (!email || email === 'N/A' || email.trim() === '') {
+  if (!email || email === 'N/A' || String(email).trim() === '') {
     email = '';
   }
-
-  // Only include mobile if it has a value (not N/A or empty)
   var mobile = safeGet(row, 5);
-  if (!mobile || mobile === 'N/A' || mobile.trim() === '') {
+  if (!mobile || mobile === 'N/A' || String(mobile).trim() === '') {
     mobile = '';
   }
 
@@ -336,7 +330,7 @@ function parseLeadFromRow(row, rowIndex) {
     assignedTo: safeGet(row, 11),
     followUpDue: safeGet(row, 12),
     assignedBy: safeGet(row, 13),
-    processed: safeGet(row, 14) // Column O if exists
+    processed: safeGet(row, 15) // Column P (16th column, 0-based index 15)
   };
 }
 
