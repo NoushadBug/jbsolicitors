@@ -123,7 +123,7 @@ function getLeadAPIController(rowIndex) {
 
 /**
  * Mark a lead as processed (adds a timestamp in column P)
- * @param {number} rowIndex - The row index (1-based, excluding header)
+ * @param {number} rowIndex - The row index (0-based from data array, starting at 2 for first data row)
  * @returns {Object} Response indicating success/failure
  */
 function markLeadProcessedAPIController(rowIndex) {
@@ -133,7 +133,7 @@ function markLeadProcessedAPIController(rowIndex) {
   }
 
   var lastRow = sheet.getLastRow();
-  if (rowIndex < 1 || rowIndex > lastRow - 1) {
+  if (rowIndex < 2 || rowIndex > lastRow) {
     return { error: 'Invalid row index' };
   }
 
@@ -147,9 +147,9 @@ function markLeadProcessedAPIController(rowIndex) {
   }
 
   // Set the processed timestamp in column P for the data row
-  // rowIndex is 1-based, data starts from row 3 (rows 1-2 are headers)
-  // So actual row is rowIndex + 2
-  sheet.getRange(rowIndex + 2, processedColIndex).setValue(new Date().toISOString());
+  // rowIndex is 0-based array index (2 = first data row, which is sheet row 3)
+  // So actual sheet row is rowIndex + 1
+  sheet.getRange(rowIndex + 1, processedColIndex).setValue(new Date().toISOString());
 
   return {
     success: true,
