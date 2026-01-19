@@ -133,7 +133,7 @@ function createInitialState() {
 
 function createDefaultConfig() {
   return {
-    apiUrl: 'https://script.google.com/macros/s/AKfycby5S72to10gh4cDgm5T0mwQUSDj6wWJMYjF6qvBF50y2gsRnlP8VtHD45nHNuUem9CgFw/exec',
+    apiUrl: 'https://script.google.com/macros/s/AKfycbzKiRwWVlB295ooxEYpC00X6ryvQvq-pCZOclLYMS9qCyOSUofrOqC9P96RMMduaSPNNA/exec',
     batchDelay: 2000,
     autoStart: false,
     retryAttempts: 3

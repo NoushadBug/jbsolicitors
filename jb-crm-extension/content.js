@@ -28,7 +28,8 @@ const CRM_CONFIG = {
 
 const state = {
   isInitialized: false,
-  isProcessing: false
+  isProcessing: false,
+  failedEntries: [] // Track failed entries for retry
 };
 
 // ============================================================================
@@ -75,6 +76,20 @@ function handleMessage(request, sender, sendResponse) {
 
     case 'PING':
       sendResponse({ success: true, message: 'PONG' });
+      return true;
+
+    case 'GET_FAILED_ENTRIES':
+      sendResponse({ success: true, failedEntries: state.failedEntries });
+      return true;
+
+    case 'CLEAR_FAILED_ENTRIES':
+      state.failedEntries = [];
+      sendResponse({ success: true, message: 'Failed entries cleared' });
+      return true;
+
+    case 'SHOW_FAILED_SUMMARY':
+      showFailedEntriesSummary();
+      sendResponse({ success: true, message: 'Showing failed entries' });
       return true;
 
     default:
@@ -481,6 +496,225 @@ function showErrorAlert(title, problems) {
   });
 }
 
+/**
+ * Show summary of all failed entries with option to retry
+ */
+function showFailedEntriesSummary() {
+  if (state.failedEntries.length === 0) {
+    showInfoAlert('No Failed Entries', 'All entries were processed successfully!');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+  `;
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  const titleEl = document.createElement('h2');
+  titleEl.style.cssText = `
+    margin: 0 0 16px 0;
+    color: #d32f2f;
+    font-size: 20px;
+    font-weight: 600;
+  `;
+  titleEl.textContent = 'Failed Entries Summary (' + state.failedEntries.length + ')';
+
+  const summaryEl = document.createElement('div');
+  summaryEl.style.cssText = `
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #fff3cd;
+    border-left: 4px solid #f59e0b;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #856404;
+  `;
+  summaryEl.textContent = 'The following entries failed to process. You can copy them to manually fix, or retry automation.';
+
+  const entriesList = document.createElement('div');
+  entriesList.style.cssText = `
+    margin: 0 0 20px 0;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  `;
+
+  state.failedEntries.forEach((entry, index) => {
+    const entryDiv = document.createElement('div');
+    entryDiv.style.cssText = `
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    `;
+    if (index === state.failedEntries.length - 1) {
+      entryDiv.style.borderBottom = 'none';
+    }
+
+    const name = entry.lead.givenName + ' ' + entry.lead.lastName;
+    const email = entry.lead.email || 'N/A';
+    const mobile = entry.lead.mobile || 'N/A';
+
+    entryDiv.innerHTML = `
+      <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${index + 1}. ${name}</div>
+      <div style="color: #666; margin-bottom: 2px;">Email: ${email}</div>
+      <div style="color: #666; margin-bottom: 4px;">Mobile: ${mobile}</div>
+      <div style="color: #d32f2f; font-size: 12px;">Reason: ${entry.reason}</div>
+    `;
+
+    entriesList.appendChild(entryDiv);
+  });
+
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    display: flex;
+    gap: 10px;
+    flex-direction: column;
+  `;
+
+  // Copy to clipboard button
+  const copyButton = document.createElement('button');
+  copyButton.style.cssText = `
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+  `;
+  copyButton.textContent = 'Copy All to Clipboard';
+  copyButton.onclick = () => {
+    const text = state.failedEntries.map((entry, index) => {
+      const name = entry.lead.givenName + ' ' + entry.lead.lastName;
+      return `${index + 1}. ${name}\n   Email: ${entry.lead.email || 'N/A'}\n   Mobile: ${entry.lead.mobile || 'N/A'}\n   Reason: ${entry.reason}`;
+    }).join('\n\n');
+    navigator.clipboard.writeText(text).then(() => {
+      copyButton.textContent = 'Copied!';
+      setTimeout(() => copyButton.textContent = 'Copy All to Clipboard', 2000);
+    });
+  };
+
+  // Close button
+  const closeButton = document.createElement('button');
+  closeButton.style.cssText = `
+    background: #666;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+  `;
+  closeButton.textContent = 'Close';
+  closeButton.onclick = () => document.body.removeChild(overlay);
+
+  buttonContainer.appendChild(copyButton);
+  buttonContainer.appendChild(closeButton);
+
+  dialog.appendChild(titleEl);
+  dialog.appendChild(summaryEl);
+  dialog.appendChild(entriesList);
+  dialog.appendChild(buttonContainer);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Show info alert (for no failed entries case)
+ */
+function showInfoAlert(title, message) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+  `;
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  const titleEl = document.createElement('h2');
+  titleEl.style.cssText = `
+    margin: 0 0 16px 0;
+    color: #4285f4;
+    font-size: 20px;
+    font-weight: 600;
+  `;
+  titleEl.textContent = title;
+
+  const messageEl = document.createElement('p');
+  messageEl.style.cssText = `
+    margin: 0 0 20px 0;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.6;
+  `;
+  messageEl.textContent = message;
+
+  const button = document.createElement('button');
+  button.style.cssText = `
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+  `;
+  button.textContent = 'OK';
+  button.onclick = () => document.body.removeChild(overlay);
+
+  dialog.appendChild(titleEl);
+  dialog.appendChild(messageEl);
+  dialog.appendChild(button);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
 // ============================================================================
 // MAIN WORKFLOW FUNCTIONS
 // ============================================================================
@@ -585,13 +819,14 @@ async function initializeCrm() {
  *
  * STEP-BY-STEP PROCESS:
  * ====================
- * 1. Click "+" button to create new contact
- * 2. Wait for drawer (form) to open
- * 3. Fill contact details (Title, Given Name, Last Name, Email, Mobile, Telephone)
- * 4. Fill organization details (Organization Name, Position)
- * 5. Set fixed values (Source="Other", Area of Law="Advice", Source Notes)
- * 6. Configure assignment (Assigned To="Audrey", Assigned By="Audrey" via downshift inputs)
- * 7. Save and close form
+ * 1. Validate lead data (must have email OR mobile)
+ * 2. Click "+" button to create new contact
+ * 3. Wait for drawer (form) to open
+ * 4. Fill contact details (Title, Given Name, Last Name, Email, Mobile, Telephone)
+ * 5. Fill organization details (Organization Name, Position)
+ * 6. Set fixed values (Source="Other", Area of Law="Advice", Source Notes)
+ * 7. Configure assignment (Assigned To="Audrey", Assigned By="Audrey" via downshift inputs)
+ * 8. Save and close form
  */
 async function fillForm(lead) {
   if (state.isProcessing) {
@@ -606,12 +841,39 @@ async function fillForm(lead) {
     console.log('[JB CRM] ========== FILL FORM START ==========');
     console.log('[JB CRM] Lead data:', JSON.stringify(lead, null, 2));
 
+    // VALIDATION: Check if lead has email OR mobile (at least one is required)
+    const hasEmail = lead.email && lead.email.trim() !== '';
+    const hasMobile = lead.mobile && lead.mobile.trim() !== '';
+
+    if (!hasEmail && !hasMobile) {
+      const msg = 'Missing both email and mobile - entry cannot be processed';
+      console.log('[JB CRM] VALIDATION FAILED: ' + msg);
+
+      // Add to failed entries
+      const failedEntry = {
+        lead: lead,
+        reason: msg,
+        timestamp: new Date().toISOString()
+      };
+      state.failedEntries.push(failedEntry);
+
+      throw new Error(msg);
+    }
+
     // Step 1: Click "+" button to create new contact
     console.log('[JB CRM] Step 1: Clicking + button to create new contact');
     const addButton = document.querySelector('[data-icon-name="Add"]');
     if (!addButton) {
       errors.push('Could not find Add button');
       showErrorAlert('Form Fill Error', errors);
+
+      // Add to failed entries
+      state.failedEntries.push({
+        lead: lead,
+        reason: errors.join('; '),
+        timestamp: new Date().toISOString()
+      });
+
       throw new Error('Could not find Add button');
     }
     addButton.click();
@@ -660,7 +922,14 @@ async function fillForm(lead) {
       const action = await showErrorAlert('Form Fill Problems Detected', nonTitleErrors);
 
       if (action === 'stop') {
-        // User clicked Stop - immediately stop automation
+        // User clicked Stop - immediately stop automation and add to failed
+        const failedEntry = {
+          lead: lead,
+          reason: nonTitleErrors.join('; '),
+          timestamp: new Date().toISOString()
+        };
+        state.failedEntries.push(failedEntry);
+
         sendMessage('error', 'Automation stopped by user. Errors noted: ' + nonTitleErrors.join('; '));
         throw new Error('Automation stopped by user due to errors: ' + nonTitleErrors.join('; '));
       } else if (action === 'note') {
@@ -679,6 +948,16 @@ async function fillForm(lead) {
     console.log('[JB CRM] ========== FILL FORM COMPLETE ==========');
     return { success: true, lead };
   } catch (error) {
+    // Check if this error is not already tracked (validation errors are tracked above)
+    if (!error.message.includes('Missing both email and mobile') &&
+        !error.message.includes('Automation stopped by user')) {
+      state.failedEntries.push({
+        lead: lead,
+        reason: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     sendMessage('error', 'Could not save: ' + error.message);
     console.log('[JB CRM] ========== FILL FORM FAILED ==========');
     console.log('[JB CRM] Error:', error.message);

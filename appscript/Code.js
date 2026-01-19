@@ -308,10 +308,22 @@ function parseLeadFromRow(row, rowIndex) {
   var email = safeGet(row, 3);
   if (!email || email === 'N/A' || String(email).trim() === '') {
     email = '';
+  } else {
+    email = cleanAndValidateEmail(String(email).trim());
   }
+
   var mobile = safeGet(row, 5);
   if (!mobile || mobile === 'N/A' || String(mobile).trim() === '') {
     mobile = '';
+  } else {
+    mobile = cleanPhoneNumber(String(mobile).trim());
+  }
+
+  var telephone = safeGet(row, 4);
+  if (!telephone || telephone === 'N/A' || String(telephone).trim() === '') {
+    telephone = '';
+  } else {
+    telephone = cleanPhoneNumber(String(telephone).trim());
   }
 
   return {
@@ -320,7 +332,7 @@ function parseLeadFromRow(row, rowIndex) {
     givenName: safeGet(row, 1),
     lastName: safeGet(row, 2),
     email: email,
-    telephone: safeGet(row, 4),
+    telephone: telephone,
     mobile: mobile,
     source: safeGet(row, 6),
     sourceNotes: safeGet(row, 7),
@@ -342,6 +354,100 @@ function parseLeadFromRow(row, rowIndex) {
  */
 function safeGet(arr, index) {
   return (arr && index < arr.length) ? arr[index] : '';
+}
+
+/**
+ * Clean and validate email address with auto-fixes for common issues
+ * @param {string} email - The email address to clean
+ * @returns {string} Cleaned email address or empty string if invalid
+ */
+function cleanAndValidateEmail(email) {
+  if (!email || email.trim() === '') {
+    return '';
+  }
+
+  var cleaned = email.trim().toLowerCase();
+
+  // Fix 1: Remove trailing dots (e.g., "xyz@domaiin.com." -> "xyz@domaiin.com")
+  while (cleaned.endsWith('.')) {
+    cleaned = cleaned.substring(0, cleaned.length - 1);
+  }
+
+  // Fix 2: Remove leading dots
+  while (cleaned.startsWith('.')) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // Fix 3: Replace multiple consecutive dots with single dot
+  cleaned = cleaned.replace(/\.{2,}/g, '.');
+
+  // Fix 4: Remove dots right before @ (e.g., "xyz.@domain.com" -> "xyz@domain.com")
+  cleaned = cleaned.replace(/\.\@/g, '@');
+
+  // Fix 5: Remove dots right after @ (e.g., "xyz@.domain.com" -> "xyz@domain.com")
+  cleaned = cleaned.replace(/\@\./g, '@');
+
+  // Fix 6: Remove spaces
+  cleaned = cleaned.replace(/\s/g, '');
+
+  // Fix 7: Common domain typos
+  var domainFixes = {
+    'gmial.com': 'gmail.com',
+    'gmil.com': 'gmail.com',
+    'gmai.com': 'gmail.com',
+    'yahooo.com': 'yahoo.com',
+    'yahho.com': 'yahoo.com',
+    'hotmial.com': 'hotmail.com',
+    'hotmil.com': 'hotmail.com',
+    'outlok.com': 'outlook.com',
+    'outloook.com': 'outlook.com'
+  };
+
+  var atIndex = cleaned.indexOf('@');
+  if (atIndex > 0) {
+    var domain = cleaned.substring(atIndex + 1);
+    if (domainFixes[domain]) {
+      cleaned = cleaned.substring(0, atIndex + 1) + domainFixes[domain];
+    }
+  }
+
+  // Basic validation: must have @ and at least one dot after @
+  if (!cleaned.match(/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i)) {
+    // If invalid, return original (in case auto-fix broke it)
+    // But if it has obvious issues, return empty
+    if (email.match(/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i)) {
+      return email; // Original was valid, return it
+    }
+    return ''; // Invalid email
+  }
+
+  return cleaned;
+}
+
+/**
+ * Clean phone number - remove extra characters, spaces, etc.
+ * @param {string} phone - The phone number to clean
+ * @returns {string} Cleaned phone number
+ */
+function cleanPhoneNumber(phone) {
+  if (!phone || phone.trim() === '') {
+    return '';
+  }
+
+  // Remove all non-numeric characters except + at the start
+  var cleaned = phone.trim().replace(/[^0-9+]/g, '');
+
+  // Remove leading + if present (keep as local number)
+  if (cleaned.startsWith('+')) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // Remove leading 00 if present
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.substring(2);
+  }
+
+  return cleaned;
 }
 
 /**
